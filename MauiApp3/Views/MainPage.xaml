@@ -1,0 +1,86 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MauiApp3.Views.MainPage"
+             BackgroundColor="#F5F5F7">
+    
+    <ContentPage.ToolbarItems>
+        <!-- Windows/Android/iOS üzerinde otomatik olarak üst barda görünür -->
+        <ToolbarItem Text="Ayarlar" 
+                 IconImageSource="gear_icon.png" 
+                 Order="Primary" 
+                 Clicked="OnSettingsClicked" />
+    </ContentPage.ToolbarItems>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="25" Spacing="20">
+
+            <Label Text="Öğrenci Finans Asistanı" FontSize="26" FontAttributes="Bold" 
+                   HorizontalOptions="Center" TextColor="#1C1C1E" Margin="0,10"/>
+
+            <Frame CornerRadius="10" Padding="5" BackgroundColor="White" HasShadow="False" BorderColor="#D1D1D6">
+                <VerticalStackLayout Padding="10">
+                    <Label Text="Üniversiteniz" FontSize="12" TextColor="Gray"/>
+                    <Entry x:Name="UniEntry" Placeholder="Üniversite adını girin..." 
+                           Unfocused="OnUniEntryUnfocused" TextColor="Black" FontSize="16"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Başlık ve Slider -->
+            
+            <VerticalStackLayout Spacing="10" Margin="0,10">
+                <Label Text="Bugünkü Bütçeniz" FontSize="14" HorizontalOptions="Center" TextColor="#3A3A3C"/>
+                <Slider x:Name="BudgetSlider" Minimum="100" Maximum="5000" 
+                        MinimumTrackColor="#2196F3" MaximumTrackColor="#D1D1D6"
+                        ValueChanged="OnSliderValueChanged" />
+                <Label x:Name="BudgetValueLabel" Text="100 TL" FontSize="32" 
+                       FontAttributes="Bold" HorizontalOptions="Center" TextColor="#2196F3"/>
+            </VerticalStackLayout>
+
+            <Button Text="➕ Harcama Ekle" 
+            Clicked="OnAddExpenseClicked" 
+            BackgroundColor="#4CAF50" 
+            TextColor="White" 
+            CornerRadius="25"
+            WidthRequest="200"
+            Margin="0,10" />
+
+            <Button Text="Tavsiye ve Haberleri Getir" Clicked="OnAnalyzeClicked" 
+                    BackgroundColor="#2196F3" TextColor="White" CornerRadius="12" 
+                    HeightRequest="50" FontAttributes="Bold"/>
+
+            <!-- Mini Board (Haberler ve Tavsiye) -->
+            <Frame x:Name="MiniBoard" CornerRadius="20" HasShadow="True" Padding="20" 
+                   BackgroundColor="White" HeightRequest="100" BorderColor="Transparent">
+                <Frame.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnBoardTapped" />
+                </Frame.GestureRecognizers>
+
+                <VerticalStackLayout>
+                    <Label x:Name="BoardTitle" Text="📌 Finansal Özet (Tıkla ve Gör)" 
+                           FontAttributes="Bold" FontSize="16" TextColor="#1C1C1E"/>
+
+                <!-- Başlangıçta gizli olan detay kısmı -->
+                    <ScrollView MaximumHeightRequest="400">
+                        <VerticalStackLayout x:Name="DetailsLayout" IsVisible="True" Spacing="15" Margin="0,15,0,0">
+                        <Label Text="Günün Haberleri" FontAttributes="Bold" TextColor="#2196F3"/>
+
+                        <!-- TextColor ve MinimumHeightRequest ekledik -->
+                        <Label x:Name="NewsLabel" Text="Haberler buraya gelecek..." 
+           TextColor="Black" FontSize="14" MinimumHeightRequest="50" />
+
+                        <BoxView HeightRequest="1" Color="#E5E5EA"/>
+
+                        <Label Text="Yatırım ve Tasarruf Tavsiyesi" FontAttributes="Bold" TextColor="#2196F3"/>
+
+                        <!-- TextColor ekledik -->
+                        <Label x:Name="AdviceLabel" Text="Tavsiye buraya gelecek..." 
+           TextColor="Black" FontSize="14" FontAttributes="Italic" />
+                    </VerticalStackLayout>
+                    </ScrollView>
+                </VerticalStackLayout>
+        </Frame>
+
+    </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

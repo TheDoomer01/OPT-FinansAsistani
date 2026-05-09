@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<toolkit:Popup xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+               xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+               xmlns:models="clr-namespace:MauiApp3.Models"
+               x:Class="MauiApp3.Views.AddExpensePopup">
+
+    <!-- Popup İçeriği -->
+    <Frame BackgroundColor="White" CornerRadius="20" Padding="20" WidthRequest="300" HasShadow="True">
+        <VerticalStackLayout Spacing="15">
+            <Label Text="Harcama Ekle" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center" TextColor="#333" />
+
+            <Entry x:Name="DescEntry" Placeholder="Açıklama (Örn: Yemekhane)" PlaceholderColor="Gray" TextColor="Black"/>
+            <Entry x:Name="AmountEntry" Placeholder="Tutar (TL)" Keyboard="Numeric" PlaceholderColor="Gray" TextColor="Black" />
+
+            <Picker x:Name="CategoryPicker" Title="Kategori Seçin">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>Yemek</x:String>
+                        <x:String>Ulaşım</x:String>
+                        <x:String>Eğitim</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Button Text="KAYDET" Clicked="OnSaveClicked" BackgroundColor="#2196F3" TextColor="White" FontAttributes="Bold" />
+            <Button Text="VAZGEÇ" Clicked="OnCancelClicked" BackgroundColor="Transparent" TextColor="Red" />
+        </VerticalStackLayout>
+    </Frame>
+</toolkit:Popup>
