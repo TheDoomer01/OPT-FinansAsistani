@@ -1,55 +1,54 @@
 ﻿using CommunityToolkit.Maui;
-using CommunityToolkit.Maui.Core;
 using CommunityToolkit.Maui.Extensions;
 using CommunityToolkit.Maui.Views;
 using MauiApp3.Helpers;
 using MauiApp3.Models;
-using MauiApp3.Services; // Servisi tanıtmak için
+using MauiApp3.Services;
 using Newtonsoft.Json;
-using System.Collections.ObjectModel;
 
 namespace MauiApp3.Views;
 
 public partial class MainPage : ContentPage
 {
-    // 1. GeminiService nesnesini burada tanımla
-    private readonly GeminiService _geminiService = new GeminiService();
+    private readonly GeminiService _geminiService;
+    private readonly DatabaseService _databaseService;
     private bool isExpanded = false;
 
-    public MainPage()
+    public MainPage(GeminiService geminiService, DatabaseService databaseService)
     {
         InitializeComponent();
-        // Eğer hafıza boşsa kutucuk boş kalsın (Placeholder görünecek)
+
+        // Servisleri güvenli yuvalarına atıyoruz
+        _geminiService = geminiService;
+        _databaseService = databaseService;
+
+        // Üniversite bilgisini çekiyoruz
         var savedUni = UserSession.University;
         UniEntry.Text = string.IsNullOrEmpty(savedUni) ? "" : savedUni;
+
+        // Geçmişi yüklüyoruz
+        LoadHistory();
     }
 
-    // Kullanıcı yazdığı an hafızaya kaydet
     void OnUniEntryUnfocused(object sender, FocusEventArgs e)
     {
-        // Artık doğrudan yardımcı sınıfımızı kullanıyoruz
         UserSession.University = UniEntry.Text;
-
-        // Okul değiştiği için eski bütçe tavsiyelerini temizliyoruz
         Preferences.Default.Remove("LastFinanceData");
     }
 
-    // 2. Yeni metodları buraya ekle
-
     private async void OnAddExpenseClicked(object sender, EventArgs e)
     {
-        var dbService = Handler.MauiContext.Services.GetService<DatabaseService>();
-        var popup = new AddExpensePopup(dbService);
+        // ARTIK Handler.MauiContext KULLANMIYORUZ! Direkt _databaseService kullanıyoruz.
+        var popup = new AddExpensePopup(_databaseService);
 
-        // Sonucu 'object' olarak alıyoruz, böylece IPopupResult kavgası bitiyor
         object result = await this.ShowPopupAsync(popup);
 
-        // Mermi geçirmez kontrol: Sonuç null değilse ve "true" değerine eşitse
         if (result != null && result.Equals(true))
         {
             await DisplayAlert("Tamam", "Harcama kaydedildi!", "OK");
         }
     }
+
     void OnSliderValueChanged(object sender, ValueChangedEventArgs e)
     {
         BudgetValueLabel.Text = $"{Math.Round(e.NewValue)} TL";
@@ -58,17 +57,13 @@ public partial class MainPage : ContentPage
     async void OnBoardTapped(object sender, EventArgs e)
     {
         isExpanded = !isExpanded;
-
         if (isExpanded)
         {
-            // 'await' kaldırıldı çünkü Animate void döner.
-            // Animasyon bitince (finished) detayları görünür yapıyoruz.
             MiniBoard.Animate("Expand", x => MiniBoard.HeightRequest = x, 100, 350, length: 250,
                 finished: (v, c) => MainThread.BeginInvokeOnMainThread(() => DetailsLayout.IsVisible = true));
         }
         else
         {
-            // Küçülürken önce detayları gizlemek daha şık durur
             DetailsLayout.IsVisible = false;
             MiniBoard.Animate("Collapse", x => MiniBoard.HeightRequest = x, 350, 100, length: 250);
         }
@@ -78,164 +73,169 @@ public partial class MainPage : ContentPage
     {
         var selectedBudget = Math.Round(BudgetSlider.Value);
 
-        // 1. Önce hafızayı kontrol et (Kota dostu sistem)
+        // 1. KOTA DOSTU KONTROL
         string cachedJson = Preferences.Default.Get("LastFinanceData", string.Empty);
         if (!string.IsNullOrEmpty(cachedJson))
         {
             var cachedData = JsonConvert.DeserializeObject<FinanceData>(cachedJson);
-            if ((DateTime.Now - cachedData.KayitTarihi).TotalHours < 1)
+            if (cachedData != null && !string.IsNullOrEmpty(cachedData.tavsiye) &&
+                (DateTime.Now - cachedData.KayitTarihi).TotalHours < 3)
             {
                 UpdateUI(cachedData);
                 return;
             }
         }
 
-        // AMAÇ: Eğer hafızada veri yoksa veya 1 saatten eskiyse, Gemini'den yeni veri iste.
         try
         {
-            NewsLabel.Text = "Gemini 2.5 Flash analiz ediyor...";
-
-            // Gemini'ye "Bana sadece JSON ver" diye kesin bir komut veriyoruz.
-            string userUni = Preferences.Default.Get("UserUniversity", "herhangi bir üniversite");
-            var budget = Math.Round(BudgetSlider.Value);
+            // 1. Hazırlık: Rapor yazılarını gizle, yükleme simgesini aç
+            LoadingIndicator.IsVisible = true;
+            LoadingIndicator.IsRunning = true;
+            AnalyzeButton.IsEnabled = false;
+            NewsLabel.Text = ""; // Eski raporu temizle
 
             string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcının bütçesi {selectedBudget} TL " +
                 $"ve okuduğu okul: {UserSession.University}. " +
-                $"Tavsiyelerini verirken bu üniversitenin bulunduğu şehrin yaşam maliyetlerini, " +
-                $"varsa o bölgedeki popüler öğrenci semtlerini ve öğrenci harcamalarını (ulaşım, yemekhane) dikkate al. " +
-                $"Ayrıca kullanıcının bölümüne uygun kariyer odaklı küçük yatırım veya tasarruf ipuçları ver. " +
-                "Sadece ve sadece şu JSON formatında cevap ver, başka açıklama ekleme: " +
+                $"Sadece ve sadece şu JSON formatında cevap ver: " +
                 "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
 
             var response = await _geminiService.GetResponseAsync(prompt);
 
-            // GEÇİCİ OLARAK ŞUNU EKLE:
+            // BU SATIRI EKLE: Gemini'den gelen ham metni ekranda gör
             //await DisplayAlert("Gemini Ne Dedi?", response, "Tamam");
 
-            // JSON dışındaki gereksiz karakterleri (```json gibi) temizliyoruz
             int start = response.IndexOf("{");
             int end = response.LastIndexOf("}");
 
-            if (start >= 0 && end > start)
+            if (start < 0)
             {
-                response = response.Substring(start, (end - start) + 1);
-            }
-
-            // Deserialization (Metni nesneye çevirme) ayarlarını yapıyoruz
-            var settings = new JsonSerializerSettings
-
-            {
-                NullValueHandling = NullValueHandling.Ignore,
-                MissingMemberHandling = MissingMemberHandling.Ignore
-            };
-
-            // Metni FinanceData modeline dönüştürüyoruz
-            var result = JsonConvert.DeserializeObject<FinanceData>(response, settings);
-
-            // Şu küçük kontrol hayat kurtarır:
-            if (result == null)
-            {
-                NewsLabel.Text = "Veri ayrıştırılamadı, lütfen tekrar deneyin.";
+                NewsLabel.Text = "API Hatası: " + response;
                 return;
             }
 
-            // Şu anki saati damgala
+            response = response.Substring(start, (end - start) + 1);
+
+            var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore };
+            var result = JsonConvert.DeserializeObject<FinanceData>(response, settings);
+
+            if (result == null) return;
+
             result.KayitTarihi = DateTime.Now;
 
-            // AMAÇ: Yeni gelen ve işlenen bu veriyi bir sonraki açılışta kullanmak için Preferences'a kaydet.
-            string jsonToSave = JsonConvert.SerializeObject(result);
-            Preferences.Default.Set("LastFinanceData", jsonToSave);
+            // 3. SQLITE KAYDI
+            await _databaseService.AddAnalysisAsync(result);
 
-            // Ekrandaki kutucukları doldur
-            UpdateUI(result);
+            // 4. PREFERENCES GÜNCELLEME
+            Preferences.Default.Set("LastFinanceData", JsonConvert.SerializeObject(result));
+
+            // 5. ARAYÜZÜ GÜNCELLE
+            if (result != null && !string.IsNullOrEmpty(result.tavsiye))
+            {
+                this.ShowPopup(new AnalysisPopup(result));
+            }
+            else
+            {
+                await DisplayAlert("Uyarı", "Gemini'den anlamlı bir analiz gelmedi. Lütfen tekrar deneyin.", "Tamam");
+            }
+            LoadHistory();
+
+            this.ShowPopup(new AnalysisPopup(result));
+
         }
         catch (Exception ex)
         {
-            NewsLabel.Text = "Hata oluştu: " + ex.Message;
+            if (ex.Message.Contains("429"))
+                await DisplayAlert("Kota Sınırı", "Dakikalık istek sınırına takıldık. Lütfen 1 dakika bekleyin.", "Tamam");
+            else NewsLabel.Text = "Hata: " + ex.Message;
         }
+        finally
+        {
+            // 4. Bitiş: Yükleme simgesini kapat, butonu aç
+            LoadingIndicator.IsVisible = false;
+            LoadingIndicator.IsRunning = false;
+            AnalyzeButton.IsEnabled = true;
+        }
+    }
+
+    private async void LoadHistory()
+    {
+        try
+        {
+            var history = await _databaseService.GetAnalysesAsync();
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (HistoryList != null)
+                {
+                    HistoryList.ItemsSource = history;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Hata: {ex.Message}");
+        }
+    }
+
+    void UpdateUI(FinanceData data)
+    {
+        if (data == null) return;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            AdviceLabel.Text = data.tavsiye ?? "Tavsiye boş.";
+
+            // Haberleri Gösterme Mantığı
+            if (data.haberler != null && data.haberler.Count > 0)
+            {
+                // Eğer Gemini'den yeni geldiyse (Liste dolu)
+                NewsLabel.Text = "• " + string.Join("\n\n• ", data.haberler);
+            }
+            else if (!string.IsNullOrEmpty(data.HaberlerMetni))
+            {
+                // Eğer Veritabanından (SQLite) geldiyse (Metin dolu)
+                var haberListesi = data.HaberlerMetni.Split('|');
+                NewsLabel.Text = "• " + string.Join("\n\n• ", haberListesi);
+            }
+            else
+            {
+                NewsLabel.Text = "Haber listesi boş.";
+            }
+
+            BoardTitle.Text = $"📌 {UserSession.University} Finans Özeti ({data.KayitTarihi:HH:mm})";
+            DetailsLayout.IsVisible = true;
+            MiniBoard.HeightRequest = -1;
+            isExpanded = true;
+        });
     }
 
     async void OnSettingsClicked(object sender, EventArgs e)
     {
-        // Kullanıcıya seçenek sunuyoruz
         string action = await DisplayActionSheet("Ayarlar", "Vazgeç", null, "Verileri Sıfırla", "Hakkında");
-
-        switch (action)
-        {
-            case "Verileri Sıfırla":
-                await HandleClearSession();
-                break;
-            case "Hakkında":
-                await DisplayAlert("Bilgi", "Bu uygulama bir öğrenci projesi olarak geliştirilmiştir.", "Tamam");
-                break;
-        }
+        if (action == "Verileri Sıfırla") await HandleClearSession();
     }
 
-    // Silme işlemini ayrı bir metodda topladık (Kod temizliği!)
     private async Task HandleClearSession()
     {
-        bool confirm = await DisplayAlert("Dikkat", "Tüm verileriniz silinecek, emin misiniz?", "Evet", "Hayır");
-
-        if (confirm)
+        if (await DisplayAlert("Dikkat", "Tüm veriler silinsin mi?", "Evet", "Hayır"))
         {
-            // 1. Hafızayı temizle
             UserSession.ClearSession();
             Preferences.Default.Remove("LastFinanceData");
-
-            // 2. Arayüzü temizle
             UniEntry.Text = string.Empty;
-            NewsLabel.Text = "Veriler temizlendi.";
-            AdviceLabel.Text = "Veriler temizlendi.";
-            BoardTitle.Text = "📌 Finansal Özet (Tıkla ve Gör)";
-
-            // Kutuyu kapat
-            isExpanded = false;
-            DetailsLayout.IsVisible = false;
-            MiniBoard.HeightRequest = 100;
-
-            await DisplayAlert("Başarılı", "Her şey fabrika ayarlarına döndü.", "Tamam");
+            await DisplayAlert("Başarılı", "Sıfırlandı.", "Tamam");
         }
     }
-
-    // AMAÇ: Ekrandaki Label'ları doldurmak için kod tekrarını önleyen yardımcı metod.
-    void UpdateUI(FinanceData data)
+    private void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (data == null) return;
+        // Seçilen öğeyi FinanceData olarak al
+        var selectedData = e.CurrentSelection.FirstOrDefault() as FinanceData;
 
-        MainThread.BeginInvokeOnMainThread(() =>
+        if (selectedData != null)
         {
-            // Modelde isimleri küçük harf yaptığımız için burada da küçük harf kullanıyoruz
-            AdviceLabel.Text = data.tavsiye ?? "Tavsiye boş geldi.";
 
-            if (data.haberler != null && data.haberler.Count > 0)
-                NewsLabel.Text = "• " + string.Join("\n\n• ", data.haberler);
-            else
-                NewsLabel.Text = "Haber listesi boş.";
+            this.ShowPopup(new AnalysisPopup(selectedData));
+            ((CollectionView)sender).SelectedItem = null;
 
-            BoardTitle.Text = $"📌 {UserSession.University} Finans Özeti ({data.KayitTarihi:HH:mm})";
-
-            DetailsLayout.IsVisible = true;
-            MiniBoard.HeightRequest = -1; // -1, içeriğe göre otomatik büyümesini sağlar (Kritik!)
-            isExpanded = true;
-        });
-    }
-}
-public static class MauiProgram
-{
-    public static MauiApp CreateMauiApp()
-    {
-        var builder = MauiApp.CreateBuilder();
-
-        builder
-            .UseMauiApp<App>()
-            .UseMauiCommunityToolkit() // <-- ensure this is present
-            .ConfigureFonts(fonts =>
-            {
-                // ... existing font registrations ...
-            });
-
-        // ... other registrations ...
-
-        return builder.Build();
+            // Görsel geri bildirim: Sayfayı yukarı kaydır (Analiz kutusuna odaklan)
+            // MainScrollView.ScrollToAsync(0, 0, true); 
+        }
     }
 }

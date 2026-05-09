@@ -1,29 +1,31 @@
 ﻿using Newtonsoft.Json;
 using System.Text;
+using Microsoft.Extensions.Configuration;
+using System.Net.Http.Json;
 
 namespace MauiApp3.Services;
 
 public class GeminiService
 {
-    // 1. Buraya sadece Google AI Studio'dan aldığın anahtarı yapıştır
-    private const string ApiKey = "AIzaSyAlXPLgqMis37UGnxfsbpTIGLyMKEtnmdQ";
-
-    // Listende gördüğün tam ismi buraya yazıyoruz. 
-    // v1beta veya v1 denemelerini yapabilirsin ama 2.0 modelleri genelde v1beta ile başlar.
-    // Listende 'models/gemma-2-9b-it' veya benzeri bir isim görmüş olmalısın
-    private const string ApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
-
-
-
     private readonly HttpClient _httpClient;
+    private readonly string _apiKey;
+    // Gemini 2.5 Flash için en güncel URL
+    private const string BaseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
-    public GeminiService()
+    public GeminiService(IConfiguration configuration)
     {
         _httpClient = new HttpClient();
+        // secrets.json içindeki 'Gemini:ApiKey' hiyerarşisinden anahtarı güvenle çekiyoruz
+        _apiKey = configuration["Gemini:ApiKey"];
     }
 
     public async Task<string> GetResponseAsync(string soru)
     {
+        if (string.IsNullOrEmpty(_apiKey))
+        {
+            return "Hata: API Key bulunamadı! secrets.json dosyasını kontrol et.";
+        }
+
         try
         {
             // Google'ın beklediği veri paketi (JSON) yapısı
@@ -31,22 +33,24 @@ public class GeminiService
             {
                 contents = new[]
                 {
-                new { parts = new[] { new { text = soru } } }
-            }
+                    new { parts = new[] { new { text = soru } } }
+                }
             };
 
-            // Veriyi JSON formatına çevirip paketliyoruz
+            // Veriyi JSON formatına çeviriyoruz
             string json = JsonConvert.SerializeObject(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            // İsteği gönderiyoruz (ApiKey ve ApiUrl birleşiyor)
-            var response = await _httpClient.PostAsync(ApiUrl + ApiKey, content);
+            // URL sonuna API anahtarını ekleyerek isteği gönderiyoruz
+            var response = await _httpClient.PostAsync($"{BaseUrl}?key={_apiKey}", content);
             var resultText = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
             {
-                // Gelen cevabın içindeki o uzun metni ayıklıyoruz
+                // Gelen cevabı dynamic olarak çözüp içindeki metni ayıklıyoruz
                 dynamic data = JsonConvert.DeserializeObject(resultText);
+
+                // Gemini 3 Flash yanıt yapısı: candidates -> content -> parts -> text
                 string text = data.candidates[0].content.parts[0].text;
                 return text;
             }
