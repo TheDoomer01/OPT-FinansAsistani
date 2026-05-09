@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# API ve gizli bilgileri içeren dosyaları engelle
+secrets.json
+appsettings.Development.json
