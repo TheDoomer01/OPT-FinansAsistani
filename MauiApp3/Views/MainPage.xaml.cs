@@ -112,12 +112,17 @@ public partial class MainPage : ContentPage
 
         try
         {
-            LoadingIndicator.IsVisible = true;
-            LoadingIndicator.IsRunning = true;
+            // --- 1. BUTONU KİLİTLE (Tekrar basmayı engeller) ---
             AnalyzeButton.IsEnabled = false;
+            if (clickedButton != null) clickedButton.IsEnabled = false;            
+            LoadingIndicator.IsVisible = true;
+            LoadingIndicator.IsRunning = true;                        
+            
             NewsLabel.Text = "";
 
             string prompt = "";
+
+            await Task.Delay(3000);
 
             // İŞTE BURASI: BUTONA GÖRE PROMPT BELİRLİYORUZ
             if (clickedButton != null && clickedButton.Text == "Analiz Et")
@@ -189,6 +194,7 @@ public partial class MainPage : ContentPage
             LoadingIndicator.IsVisible = false;
             LoadingIndicator.IsRunning = false;
             AnalyzeButton.IsEnabled = true;
+            if (clickedButton != null) clickedButton.IsEnabled = true;
         }
     }
     private async void LoadHistory()
