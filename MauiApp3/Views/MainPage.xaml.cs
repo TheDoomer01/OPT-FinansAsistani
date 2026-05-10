@@ -4,8 +4,9 @@ using CommunityToolkit.Maui.Views;
 using MauiApp3.Helpers;
 using MauiApp3.Models;
 using MauiApp3.Services;
-using Newtonsoft.Json;
 using Microcharts;
+using Microsoft.Maui.Controls.Shapes;
+using Newtonsoft.Json;
 using SkiaSharp;
 using System.Diagnostics;
 
@@ -76,11 +77,27 @@ public partial class MainPage : ContentPage
         }
     }
 
+    // --- ÖNCE BU YARDIMCI METODU EKLE (OnAnalyzeClicked metodunun dışına) ---
+    private async Task<string> GetSpendingSummaryAsync()
+    {
+        var expenses = await _databaseService.GetExpensesAsync();
+        if (expenses == null || !expenses.Any())
+            return "Henüz hiç harcama girilmedi.";
+
+        // Son 10 harcamayı Gemini'nin anlayacağı bir metne çeviriyoruz
+        var summary = expenses.OrderByDescending(x => x.Date).Take(10)
+            .Select(x => $"{x.Category}: {x.Amount}TL")
+            .ToList();
+
+        return string.Join(", ", summary);
+    }
+    // --- ŞİMDİ ANA METODUN GÜNCEL HALİ ---
     async void OnAnalyzeClicked(object sender, EventArgs e)
     {
+        var clickedButton = sender as Button; // Hangi butona basıldığını anlıyoruz
         var selectedBudget = Math.Round(BudgetSlider.Value);
 
-        // 1. KOTA DOSTU KONTROL
+        // 1. KOTA DOSTU KONTROL (Cache mantığı aynı kalıyor)
         string cachedJson = Preferences.Default.Get("LastFinanceData", string.Empty);
         if (!string.IsNullOrEmpty(cachedJson))
         {
@@ -95,17 +112,35 @@ public partial class MainPage : ContentPage
 
         try
         {
-            // 1. Hazırlık: Rapor yazılarını gizle, yükleme simgesini aç
             LoadingIndicator.IsVisible = true;
             LoadingIndicator.IsRunning = true;
             AnalyzeButton.IsEnabled = false;
-            NewsLabel.Text = ""; // Eski raporu temizle
+            NewsLabel.Text = "";
 
-            string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcının bütçesi {selectedBudget} TL " +
-                $"ve okuduğu okul: {UserSession.University}. " +
-                $"Sadece ve sadece şu JSON formatında cevap ver: " +
-                "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+            string prompt = "";
 
+            // İŞTE BURASI: BUTONA GÖRE PROMPT BELİRLİYORUZ
+            if (clickedButton != null && clickedButton.Text == "Analiz Et")
+            {
+                // Veritabanındaki gerçek verileri çekiyoruz
+                string spendingData = await GetSpendingSummaryAsync();
+
+                prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcının bütçesi {selectedBudget} TL, " +
+                         $"okuduğu okul: {UserSession.University} ve son harcamaları şunlar: {spendingData}. " +
+                         $"Bu harcamaları analiz ederek öğrenciye tasarruf önerileri ver. " +
+                         $"Sadece ve sadece şu JSON formatında cevap ver: " +
+                         "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+            }
+            else
+            {
+                // Genel Tavsiye Modu
+                prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcının bütçesi {selectedBudget} TL " +
+                         $"ve okuduğu okul: {UserSession.University}. " +
+                         $"Sadece ve sadece şu JSON formatında cevap ver: " +
+                         "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+            }
+
+            // Gemini Servis Çağrısı
             var response = await _geminiService.GetResponseAsync(prompt);
 
             int start = response.IndexOf("{");
@@ -118,7 +153,6 @@ public partial class MainPage : ContentPage
             }
 
             response = response.Substring(start, (end - start) + 1);
-
             var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore };
             var result = JsonConvert.DeserializeObject<FinanceData>(response, settings);
 
@@ -139,25 +173,24 @@ public partial class MainPage : ContentPage
             }
             else
             {
-                await DisplayAlert("Uyarı", "Gemini'den anlamlı bir analiz gelmedi. Lütfen tekrar deneyin.", "Tamam");
+                await DisplayAlert("Uyarı", "Gemini'den anlamlı bir analiz gelmedi.", "Tamam");
             }
             LoadHistory();
         }
         catch (Exception ex)
         {
             if (ex.Message.Contains("429"))
-                await DisplayAlert("Kota Sınırı", "Dakikalık istek sınırına takıldık. Lütfen 1 dakika bekleyin.", "Tamam");
-            else NewsLabel.Text = "Hata: " + ex.Message;
+                await DisplayAlert("Kota Sınırı", "Lütfen 1 dakika bekleyin.", "Tamam");
+            else
+                NewsLabel.Text = "Hata: " + ex.Message;
         }
         finally
         {
-            // 4. Bitiş: Yükleme simgesini kapat, butonu aç
             LoadingIndicator.IsVisible = false;
             LoadingIndicator.IsRunning = false;
             AnalyzeButton.IsEnabled = true;
         }
     }
-
     private async void LoadHistory()
     {
         try
@@ -302,6 +335,26 @@ public partial class MainPage : ContentPage
                     HoleRadius = 0.6f
                 };
             });
+            MiniExpenseList.Children.Clear();
+
+            var recentExpenses = allExpenses.OrderByDescending(x => x.Date).Take(5);
+
+            foreach (var exp in recentExpenses)
+            {
+                var frame = new Border
+                {
+                    StrokeShape = new RoundRectangle { CornerRadius = 5 },
+                    Padding = 5,
+                    Content = new VerticalStackLayout
+                    {
+                        Children = {
+                    new Label { Text = exp.Category, FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = Colors.Black },
+                    new Label { Text = exp.Amount.ToString("C"), FontSize = 10, TextColor = Colors.DarkGreen }
+                }
+                    }
+                };
+                MiniExpenseList.Children.Add(frame);
+            }
         }
         catch (Exception ex)
         {
