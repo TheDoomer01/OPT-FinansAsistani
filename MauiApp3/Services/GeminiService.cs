@@ -61,7 +61,47 @@ public class GeminiService
         }
         catch (Exception ex)
         {
-            return $"Bağlantı Hatası: {ex.Message}";
+            return $"Hata: {ex.Message}";
         }
     }
+    public async Task<string> AnalyzeImageAsync(string prompt, string base64Image)
+    {
+        try
+        {
+            var requestBody = new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new object[]
+                        {
+                            new { text = prompt },
+                            new { inline_data = new { mime_type = "image/jpeg", data = base64Image } }
+                        }
+                    }
+                }
+            };
+
+            var jsonPayload = JsonConvert.SerializeObject(requestBody);
+            var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync($"{BaseUrl}?key={_apiKey}", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                dynamic result = JsonConvert.DeserializeObject(jsonResponse);
+                return result.candidates[0].content.parts[0].text;
+            }
+
+            return "Hata: API yanıt vermedi.";
+        }
+        catch (Exception ex)
+        {
+            return "Görsel analiz hatası: " + ex.Message;
+        }
+    } // <--- 2. DURAK: AnalyzeImageAsync METODU BURADA BİTİYOR
+
 }
+
+

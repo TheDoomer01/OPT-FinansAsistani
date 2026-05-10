@@ -5,26 +5,39 @@
                xmlns:models="clr-namespace:MauiApp3.Models"
                x:Class="MauiApp3.Views.AddExpensePopup">
 
-    <!-- Popup İçeriği -->
-    <Frame BackgroundColor="White" CornerRadius="20" Padding="20" WidthRequest="300" HasShadow="True">
+    <Frame BackgroundColor="White" CornerRadius="20" Padding="20" WidthRequest="320" HasShadow="True">
         <VerticalStackLayout Spacing="15">
             <Label Text="Harcama Ekle" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center" TextColor="#333" />
 
             <Entry x:Name="DescEntry" Placeholder="Açıklama (Örn: Yemekhane)" PlaceholderColor="Gray" TextColor="Black"/>
             <Entry x:Name="AmountEntry" Placeholder="Tutar (TL)" Keyboard="Numeric" PlaceholderColor="Gray" TextColor="Black" />
 
-            <Picker x:Name="CategoryPicker" Title="Kategori Seçin">
+            <Picker x:Name="CategoryPicker" Title="Kategori Seçin" TextColor="Black">
                 <Picker.ItemsSource>
                     <x:Array Type="{x:Type x:String}">
                         <x:String>Yemek</x:String>
                         <x:String>Ulaşım</x:String>
                         <x:String>Eğitim</x:String>
+                        <x:String>Market</x:String>
+                        <x:String>Eğlence</x:String>
                     </x:Array>
                 </Picker.ItemsSource>
             </Picker>
 
-            <Button Text="KAYDET" Clicked="OnSaveClicked" BackgroundColor="#2196F3" TextColor="White" FontAttributes="Bold" />
-            <Button Text="VAZGEÇ" Clicked="OnCancelClicked" BackgroundColor="Transparent" TextColor="Red" />
+            <VerticalStackLayout BackgroundColor="White" Padding="25" Spacing="15" WidthRequest="320">
+                <Label Text="Fiş Taraması" TextColor="Black" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center"/>
+
+                <Button x:Name="ScanButton" Text="📷 Kamerayı Aç" Clicked="OnScanReceiptClicked" BackgroundColor="#2E7D32" TextColor="White"/>
+
+                <Button x:Name="GalleryButton" Text="🖼️ Galeriden Seç" Clicked="OnPickPhotoClicked" BackgroundColor="#1565C0" TextColor="White"/>
+
+                <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False" Color="#2196F3"/>
+            </VerticalStackLayout>
+            
+            <VerticalStackLayout Spacing="5">
+                <Button Text="KAYDET" Clicked="OnSaveClicked" BackgroundColor="#2196F3" TextColor="White" FontAttributes="Bold" CornerRadius="10" />
+                <Button Text="VAZGEÇ" Clicked="OnCancelClicked" BackgroundColor="Transparent" TextColor="Red" />
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </Frame>
 </toolkit:Popup>

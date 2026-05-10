@@ -5,6 +5,7 @@ using MauiApp3.Helpers;
 using MauiApp3.Models;
 using MauiApp3.Services;
 using Microcharts;
+using Microcharts.Maui;
 using Microsoft.Maui.Controls.Shapes;
 using Newtonsoft.Json;
 using SkiaSharp;
@@ -37,22 +38,19 @@ public partial class MainPage : ContentPage
             LoadHistory();
         });
     }
-
     void OnUniEntryUnfocused(object sender, FocusEventArgs e)
     {
         UserSession.University = UniEntry.Text;
         Preferences.Default.Remove("LastFinanceData");
     }
-
     private async void OnAddExpenseClicked(object sender, EventArgs e)
     {
-        var popup = new AddExpensePopup(_databaseService);
-
+        var popup = new AddExpensePopup(_databaseService, _geminiService);
         await this.ShowPopupAsync(popup);
         // Popup tamamen kapandıktan sonra bizim oluşturduğumuz bayrağı (IsSuccess) kontrol ediyoruz!
         if (popup.IsSuccess)
         {
-            UpdateChart();
+            await UpdateChart();
             await DisplayAlert("Harika", "Harcama başarıyla eklendi ve grafik güncellendi!", "OK");
         }
     }
@@ -94,107 +92,86 @@ public partial class MainPage : ContentPage
     // --- ŞİMDİ ANA METODUN GÜNCEL HALİ ---
     async void OnAnalyzeClicked(object sender, EventArgs e)
     {
-        var clickedButton = sender as Button; // Hangi butona basıldığını anlıyoruz
         var selectedBudget = Math.Round(BudgetSlider.Value);
 
-        // 1. KOTA DOSTU KONTROL (Cache mantığı aynı kalıyor)
+        // 1. KOTA/HIZ KONTROLÜ (Cache)
+        // Eğer son 1 saat içinde bir analiz yapıldıysa, API'yi yormadan eskiyi getir
         string cachedJson = Preferences.Default.Get("LastFinanceData", string.Empty);
         if (!string.IsNullOrEmpty(cachedJson))
         {
             var cachedData = JsonConvert.DeserializeObject<FinanceData>(cachedJson);
-            if (cachedData != null && !string.IsNullOrEmpty(cachedData.tavsiye) &&
-                (DateTime.Now - cachedData.KayitTarihi).TotalHours < 3)
+            // Eğer üzerinden 1 saat geçmediyse ve veritabanına yeni harcama eklenmediyse bunu göster
+            // (Geliştirme aşamasında burayı yorum satırı yapabilirsin ki her seferinde yeni cevap gelsin)
+            /*
+            if (cachedData != null && (DateTime.Now - cachedData.KayitTarihi).TotalHours < 1)
             {
-                UpdateUI(cachedData);
+                this.ShowPopup(new AnalysisPopup(cachedData));
                 return;
             }
         }
-
-        try
-        {
-            // --- 1. BUTONU KİLİTLE (Tekrar basmayı engeller) ---
-            AnalyzeButton.IsEnabled = false;
-            if (clickedButton != null) clickedButton.IsEnabled = false;            
-            LoadingIndicator.IsVisible = true;
-            LoadingIndicator.IsRunning = true;                        
-            
-            NewsLabel.Text = "";
-
-            string prompt = "";
-
-            await Task.Delay(3000);
-
-            // İŞTE BURASI: BUTONA GÖRE PROMPT BELİRLİYORUZ
-            if (clickedButton != null && clickedButton.Text == "Analiz Et")
+            */
+            try
             {
-                // Veritabanındaki gerçek verileri çekiyoruz
+                // UI Hazırlığı
+                AnalyzeButton.IsEnabled = false;
+                LoadingIndicator.IsVisible = true;
+                LoadingIndicator.IsRunning = true;
+
+                await Task.Delay(2000);
+
+                // 2. VERİLERİ TOPLA (İşte kritik nokta burası!)
+                // GetSpendingSummaryAsync metodun veritabanından harcamaları string olarak getiriyor olmalı
                 string spendingData = await GetSpendingSummaryAsync();
 
-                prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcının bütçesi {selectedBudget} TL, " +
-                         $"okuduğu okul: {UserSession.University} ve son harcamaları şunlar: {spendingData}. " +
-                         $"Bu harcamaları analiz ederek öğrenciye tasarruf önerileri ver. " +
-                         $"Sadece ve sadece şu JSON formatında cevap ver: " +
-                         "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+                if (string.IsNullOrEmpty(spendingData)) spendingData = "Henüz harcama kaydı bulunmuyor.";
+
+                // 3. TEK VE GÜÇLÜ PROMPT
+                string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcı {UserSession.University} öğrencisi. " +
+                                $"Bugünkü bütçesi: {selectedBudget} TL. " +
+                                $"Son harcamaları ve kategorileri: {spendingData}. " +
+                                "Bu verilere dayanarak; harcamaların bütçeye oranını analiz et, öğrenciye özel tasarruf " +
+                                "tavsiyeleri ve komik/ilginç finansal haber başlıkları üret. " +
+                                "Cevabı SADECE şu JSON formatında ver: " +
+                                "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+
+                // 4. GEMINI SERVİS ÇAĞRISI
+                var response = await _geminiService.GetResponseAsync(prompt);
+
+                // JSON Ayıklama
+                int start = response.IndexOf("{");
+                int end = response.LastIndexOf("}");
+
+                if (start >= 0 && end >= 0)
+                {
+                    response = response.Substring(start, (end - start) + 1);
+                    var result = JsonConvert.DeserializeObject<FinanceData>(response);
+
+                    if (result != null)
+                    {
+                        result.KayitTarihi = DateTime.Now;
+
+                        UpdateUI(result); // Bu satırı eklediğin an UpdateUI kodu parlayacak!
+
+                        // 5. KAYITLAR (SQLite ve Cache)
+                        await _databaseService.AddAnalysisAsync(result);
+                        Preferences.Default.Set("LastFinanceData", JsonConvert.SerializeObject(result));
+
+                        // 6. GÖSTERİM
+                        this.ShowPopup(new AnalysisPopup(result));
+                        LoadHistory(); // Ana sayfadaki listeyi tazele
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // Genel Tavsiye Modu
-                prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcının bütçesi {selectedBudget} TL " +
-                         $"ve okuduğu okul: {UserSession.University}. " +
-                         $"Sadece ve sadece şu JSON formatında cevap ver: " +
-                         "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+                await DisplayAlert("Hata", "Analiz sırasında bir sorun oluştu: " + ex.Message, "Tamam");
             }
-
-            // Gemini Servis Çağrısı
-            var response = await _geminiService.GetResponseAsync(prompt);
-
-            int start = response.IndexOf("{");
-            int end = response.LastIndexOf("}");
-
-            if (start < 0)
+            finally
             {
-                NewsLabel.Text = "API Hatası: " + response;
-                return;
+                LoadingIndicator.IsVisible = false;
+                LoadingIndicator.IsRunning = false;
+                AnalyzeButton.IsEnabled = true;
             }
-
-            response = response.Substring(start, (end - start) + 1);
-            var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore };
-            var result = JsonConvert.DeserializeObject<FinanceData>(response, settings);
-
-            if (result == null) return;
-
-            result.KayitTarihi = DateTime.Now;
-
-            // 3. SQLITE KAYDI
-            await _databaseService.AddAnalysisAsync(result);
-
-            // 4. PREFERENCES GÜNCELLEME
-            Preferences.Default.Set("LastFinanceData", JsonConvert.SerializeObject(result));
-
-            // 5. ARAYÜZÜ GÜNCELLE
-            if (result != null && !string.IsNullOrEmpty(result.tavsiye))
-            {
-                this.ShowPopup(new AnalysisPopup(result));
-            }
-            else
-            {
-                await DisplayAlert("Uyarı", "Gemini'den anlamlı bir analiz gelmedi.", "Tamam");
-            }
-            LoadHistory();
-        }
-        catch (Exception ex)
-        {
-            if (ex.Message.Contains("429"))
-                await DisplayAlert("Kota Sınırı", "Lütfen 1 dakika bekleyin.", "Tamam");
-            else
-                NewsLabel.Text = "Hata: " + ex.Message;
-        }
-        finally
-        {
-            LoadingIndicator.IsVisible = false;
-            LoadingIndicator.IsRunning = false;
-            AnalyzeButton.IsEnabled = true;
-            if (clickedButton != null) clickedButton.IsEnabled = true;
         }
     }
     private async void LoadHistory()
@@ -273,7 +250,7 @@ public partial class MainPage : ContentPage
         }
     }
 
-    public async void UpdateChart()
+    private async Task UpdateChart()
     {
         try
         {
@@ -294,6 +271,7 @@ public partial class MainPage : ContentPage
                     {
                         Entries = emptyEntries,
                         BackgroundColor = SKColors.Transparent,
+                        LabelColor = SKColor.Parse("#333333"), // Yazıları gerekirse Colors.White yapabilirsin
                         HoleRadius = 0.6f
                     };
                     if (TotalExpenseLabel != null) TotalExpenseLabel.Text = "0 ₺";
@@ -334,11 +312,15 @@ public partial class MainPage : ContentPage
                 ExpenseChartView.Chart = new DonutChart
                 {
                     Entries = entries,
-                    LabelTextSize = 35,
+                    LabelTextSize = 20,
+                    // EKSTRA: Etiketlerin duruşunu değiştirerek çakışmayı azaltabilirsin
+                    // LabelMode.Horizontal (Yatay) veya LabelMode.None (Hiç gösterme)
+                    LabelMode = LabelMode.None,
                     Typeface = SKTypeface.FromFamilyName("Arial"),
                     BackgroundColor = SKColors.White, 
                     LabelColor = SKColor.Parse("#333333"),  // Koyu gri/Siyah yazılar (ARTIK GÖRÜNECEK!)
-                    HoleRadius = 0.6f
+                    HoleRadius = 0.7f, // İçerideki boşluğu biraz artırırsan daha modern durur
+                    GraphPosition = GraphPosition.Center // Grafiği merkeze hizalar
                 };
             });
             MiniExpenseList.Children.Clear();
@@ -382,5 +364,18 @@ public partial class MainPage : ContentPage
         {
             await DisplayAlert("Bilgi", "Henüz bir harcama girmediniz.", "Tamam");
         }
+    }
+    // Üst bardaki 'Tara' butonuna basınca çalışır
+    private async void OnScanReceiptClicked(object sender, EventArgs e)
+    {
+        // Toolbar'dan tıklandığında direkt Harcama Ekle popup'ını açıyoruz
+        OnAddExpenseClicked(sender, e);
+    }
+
+    // Üst bardaki 'Galeri' butonuna basınca çalışır
+    private async void OnPickPhotoClicked(object sender, EventArgs e)
+    {
+        // Aynı şekilde popup'ı açıyoruz
+        OnAddExpenseClicked(sender, e);
     }
 }
