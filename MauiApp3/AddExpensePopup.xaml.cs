@@ -4,13 +4,12 @@ using MauiApp3.Services;
 
 namespace MauiApp3.Views;
 
-// 'Popup'ın CommunityToolkit.Maui.Views'dan geldiğini garanti ediyoruz.
 public partial class AddExpensePopup : Popup
 {
     private readonly DatabaseService _dbService;
 
-    // Store the result so callers can read it after the popup is closed.
-    public AddExpenseResult? Result { get; private set; }
+    // MAUI Toolkit'in çakışmalarını aşmak için kendi bayrağımızı üretiyoruz:
+    public bool IsSuccess { get; private set; } = false;
 
     public AddExpensePopup(DatabaseService dbService)
     {
@@ -18,20 +17,44 @@ public partial class AddExpensePopup : Popup
         _dbService = dbService;
     }
 
-    // Use CloseAsync (available on the Popup base type in the provided signatures).
-    // Make the handlers async void because they're event handlers.
     private async void OnSaveClicked(object sender, EventArgs e)
     {
-        // Preserve the same payload as original code.
-        Result = new AddExpenseResult { IsSuccess = true };
+        try
+        {
+            if (string.IsNullOrWhiteSpace(DescEntry.Text) || string.IsNullOrWhiteSpace(AmountEntry.Text))
+            {
+                return;
+            }
 
-        await CloseAsync();
+            if (!double.TryParse(AmountEntry.Text, out double girilenTutar))
+            {
+                return;
+            }
+
+            var newExpense = new Expense
+            {
+                Amount = girilenTutar,
+                Category = DescEntry.Text,
+                Date = DateTime.Now
+            };
+
+            await _dbService.AddExpenseAsync(newExpense);
+
+            // 1. İşlem tamam! Kendi bayrağımızı "Başarılı" (true) yapıyoruz
+            IsSuccess = true;
+
+            // 2. Parametresiz, hatasız, standart kapatma metodunu çağırıyoruz
+            await CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Kayıt Hatası: {ex.Message}");
+        }
     }
 
     private async void OnCancelClicked(object sender, EventArgs e)
     {
-        Result = new AddExpenseResult { IsSuccess = false };
-
+        IsSuccess = false;
         await CloseAsync();
     }
 }

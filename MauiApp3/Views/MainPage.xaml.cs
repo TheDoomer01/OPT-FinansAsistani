@@ -5,6 +5,9 @@ using MauiApp3.Helpers;
 using MauiApp3.Models;
 using MauiApp3.Services;
 using Newtonsoft.Json;
+using Microcharts;
+using SkiaSharp;
+using System.Diagnostics;
 
 namespace MauiApp3.Views;
 
@@ -22,12 +25,16 @@ public partial class MainPage : ContentPage
         _geminiService = geminiService;
         _databaseService = databaseService;
 
-        // Üniversite bilgisini çekiyoruz
+        // DÜZELTME 1: Havada duran kodlar buraya, metodun içine alındı.
         var savedUni = UserSession.University;
         UniEntry.Text = string.IsNullOrEmpty(savedUni) ? "" : savedUni;
 
-        // Geçmişi yüklüyoruz
-        LoadHistory();
+        Dispatcher.Dispatch(async () =>
+        {
+            await Task.Delay(500);
+            UpdateChart();
+            LoadHistory();
+        });
     }
 
     void OnUniEntryUnfocused(object sender, FocusEventArgs e)
@@ -38,14 +45,14 @@ public partial class MainPage : ContentPage
 
     private async void OnAddExpenseClicked(object sender, EventArgs e)
     {
-        // ARTIK Handler.MauiContext KULLANMIYORUZ! Direkt _databaseService kullanıyoruz.
         var popup = new AddExpensePopup(_databaseService);
 
-        object result = await this.ShowPopupAsync(popup);
-
-        if (result != null && result.Equals(true))
+        await this.ShowPopupAsync(popup);
+        // Popup tamamen kapandıktan sonra bizim oluşturduğumuz bayrağı (IsSuccess) kontrol ediyoruz!
+        if (popup.IsSuccess)
         {
-            await DisplayAlert("Tamam", "Harcama kaydedildi!", "OK");
+            UpdateChart();
+            await DisplayAlert("Harika", "Harcama başarıyla eklendi ve grafik güncellendi!", "OK");
         }
     }
 
@@ -101,9 +108,6 @@ public partial class MainPage : ContentPage
 
             var response = await _geminiService.GetResponseAsync(prompt);
 
-            // BU SATIRI EKLE: Gemini'den gelen ham metni ekranda gör
-            //await DisplayAlert("Gemini Ne Dedi?", response, "Tamam");
-
             int start = response.IndexOf("{");
             int end = response.LastIndexOf("}");
 
@@ -138,9 +142,6 @@ public partial class MainPage : ContentPage
                 await DisplayAlert("Uyarı", "Gemini'den anlamlı bir analiz gelmedi. Lütfen tekrar deneyin.", "Tamam");
             }
             LoadHistory();
-
-            this.ShowPopup(new AnalysisPopup(result));
-
         }
         catch (Exception ex)
         {
@@ -186,12 +187,10 @@ public partial class MainPage : ContentPage
             // Haberleri Gösterme Mantığı
             if (data.haberler != null && data.haberler.Count > 0)
             {
-                // Eğer Gemini'den yeni geldiyse (Liste dolu)
                 NewsLabel.Text = "• " + string.Join("\n\n• ", data.haberler);
             }
             else if (!string.IsNullOrEmpty(data.HaberlerMetni))
             {
-                // Eğer Veritabanından (SQLite) geldiyse (Metin dolu)
                 var haberListesi = data.HaberlerMetni.Split('|');
                 NewsLabel.Text = "• " + string.Join("\n\n• ", haberListesi);
             }
@@ -223,19 +222,106 @@ public partial class MainPage : ContentPage
             await DisplayAlert("Başarılı", "Sıfırlandı.", "Tamam");
         }
     }
+
     private void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Seçilen öğeyi FinanceData olarak al
         var selectedData = e.CurrentSelection.FirstOrDefault() as FinanceData;
 
         if (selectedData != null)
         {
-
             this.ShowPopup(new AnalysisPopup(selectedData));
             ((CollectionView)sender).SelectedItem = null;
+        }
+    }
 
-            // Görsel geri bildirim: Sayfayı yukarı kaydır (Analiz kutusuna odaklan)
-            // MainScrollView.ScrollToAsync(0, 0, true); 
+    public async void UpdateChart()
+    {
+        try
+        {
+            // Veritabanının yazma işlemini tamamlaması için çok kısa bir bekleme (opsiyonel ama güvenlidir)
+            await Task.Delay(100);
+
+            var allExpenses = await _databaseService.GetExpensesAsync();
+
+            if (allExpenses == null || !allExpenses.Any())
+            {
+                // UI işlemlerini ana thread'de yapalım
+                MainThread.BeginInvokeOnMainThread(() => {
+                    // Veri yoksa şık bir "Boş" halka çizdir
+                    var emptyEntries = new List<ChartEntry> {
+            new ChartEntry(1) { Color = SKColor.Parse("#E0E0E0") } // Açık gri bir halka
+        };
+                    ExpenseChartView.Chart = new DonutChart
+                    {
+                        Entries = emptyEntries,
+                        BackgroundColor = SKColors.Transparent,
+                        HoleRadius = 0.6f
+                    };
+                    if (TotalExpenseLabel != null) TotalExpenseLabel.Text = "0 ₺";
+                });
+                return;
+            }
+
+            var categoryTotals = allExpenses
+                .GroupBy(e => string.IsNullOrWhiteSpace(e.Category) ? "DİĞER" : e.Category.Trim().ToUpper())
+                .Select(g => new {
+                Category = g.Key,
+                Total = g.Sum(e => e.Amount)
+                }).ToList();
+
+            var entries = new List<ChartEntry>();
+            string[] colors = { "#3498DB", "#E74C3C", "#2ECC71", "#F1C40F", "#9B59B6" };
+            int colorIndex = 0;
+
+            foreach (var item in categoryTotals)
+            {
+                entries.Add(new ChartEntry((float)item.Total)
+                {
+                    Label = item.Category,
+                    ValueLabel = item.Total.ToString("N0") + " ₺",
+                    Color = SKColor.Parse(colors[colorIndex % colors.Length])
+                });
+                colorIndex++;
+            }
+
+            // Toplamı hesapla
+            var totalSpent = allExpenses.Sum(e => e.Amount);
+
+            // ARAYÜZ GÜNCELLEMELERİ (Mutlaka MainThread içinde)
+            MainThread.BeginInvokeOnMainThread(() => {
+                TotalExpenseLabel.Text = totalSpent.ToString("N0") + " ₺";
+
+                // Yeni grafik nesnesini oluştur ve ata
+                ExpenseChartView.Chart = new DonutChart
+                {
+                    Entries = entries,
+                    LabelTextSize = 35,
+                    Typeface = SKTypeface.FromFamilyName("Arial"),
+                    BackgroundColor = SKColors.White, 
+                    LabelColor = SKColor.Parse("#333333"),  // Koyu gri/Siyah yazılar (ARTIK GÖRÜNECEK!)
+                    HoleRadius = 0.6f
+                };
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Grafik Hatası: {ex.Message}");
+        }
+    }
+
+    private async void OnChartTapped(object sender, TappedEventArgs e)
+    {
+        // Veritabanından o anki toplam harcamayı hızlıca alalım
+        var expenses = await _databaseService.GetExpensesAsync();
+
+        if (expenses != null && expenses.Any())
+        {
+            var total = expenses.Sum(x => x.Amount);
+            await DisplayAlert("Bütçe Dağılımı", $"Şu ana kadar toplam {total} TL harcama yaptınız.", "Tamam");
+        }
+        else
+        {
+            await DisplayAlert("Bilgi", "Henüz bir harcama girmediniz.", "Tamam");
         }
     }
 }

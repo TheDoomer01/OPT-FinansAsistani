@@ -1,8 +1,9 @@
 ﻿using CommunityToolkit.Maui;
 using MauiApp3.Services;
 using MauiApp3.Views;
-using Microsoft.Extensions.Logging;
+using Microcharts.Maui;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 
 namespace MauiApp3
@@ -17,6 +18,7 @@ namespace MauiApp3
             builder.Configuration.AddUserSecrets(assembly, optional: true);
             builder
                 .UseMauiApp<App>()
+                .UseMicrocharts()
                 .UseMauiCommunityToolkit()
                 .ConfigureFonts(fonts =>
                 {
