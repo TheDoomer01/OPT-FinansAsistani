@@ -57,7 +57,26 @@ public partial class MainPage : ContentPage
 
     void OnSliderValueChanged(object sender, ValueChangedEventArgs e)
     {
-        BudgetValueLabel.Text = $"{Math.Round(e.NewValue)} TL";
+        double stepValue = Math.Round(e.NewValue);
+        BudgetSlider.Value = stepValue; // Tam sayıya yuvarla
+
+        // Entry'nin TextChanged olayını tetiklememesi için kontrol edebiliriz
+        if (BudgetEntry.Text != stepValue.ToString())
+        {
+            BudgetEntry.Text = stepValue.ToString();
+        }
+    }
+
+    void OnBudgetEntryChanged(object sender, TextChangedEventArgs e)
+    {
+        if (double.TryParse(e.NewTextValue, out double result))
+        {
+            // Slider limitleri içindeyse güncelle
+            if (result >= BudgetSlider.Minimum && result <= BudgetSlider.Maximum)
+            {
+                BudgetSlider.Value = result;
+            }
+        }
     }
 
     async void OnBoardTapped(object sender, EventArgs e)
@@ -89,6 +108,58 @@ public partial class MainPage : ContentPage
 
         return string.Join(", ", summary);
     }
+
+    async void OnFilterChanged(object sender, EventArgs e)
+    {
+        var picker = (Picker)sender;
+        int selectedIndex = picker.SelectedIndex;
+
+        int days = 0;
+        switch (selectedIndex)
+        {
+            case 0: days = 1; break;  // Bugün
+            case 1: days = 7; break;  // 1 Hafta
+            case 2: days = 30; break; // 1 Ay
+            case 3: days = 365; break; // Tümü
+        }
+
+        // Filtreye göre verileri tekrar çek ve grafiği güncelle
+        await RefreshDataWithFilter(days);
+    }
+
+    async Task RefreshDataWithFilter(int days)
+    {
+        try
+        {
+            // 1. Veritabanından filtrelenmiş listeyi çek
+            var filteredList = await _databaseService.GetSpendingsByDateAsync(days);
+
+            if (filteredList == null) return;
+
+            // 2. Grafiği bu listeye göre tekrar çiz
+            // Not: UpdateChart 'Task' olduğu için await kullanmalısın
+            await UpdateChart(filteredList);
+
+            // 3. Alt taraftaki geçmiş listesini güncelle
+            // 'ItemsSource'un başına HistoryList ekledik
+            if (HistoryList != null)
+            {
+                HistoryList.ItemsSource = filteredList.OrderByDescending(x => x.Date).ToList();
+            }
+
+            // 5. Toplam tutarı yeniden hesapla
+            double total = filteredList.Sum(x => x.Amount);
+            if (TotalExpenseLabel != null)
+            {
+                TotalExpenseLabel.Text = $"{total:N0} ₺";
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Hata", "Filtreleme yapılamadı: " + ex.Message, "Tamam");
+        }
+    }
+
     // --- ŞİMDİ ANA METODUN GÜNCEL HALİ ---
     async void OnAnalyzeClicked(object sender, EventArgs e)
     {
@@ -174,16 +245,31 @@ public partial class MainPage : ContentPage
             }
         }
     }
-    private async void LoadHistory()
+    // 'List<Expense> filterData = null' ekleyerek dışarıdan veri alabilir hale getirdik
+    private async Task LoadHistory()
     {
         try
         {
+            // 1. Eğer dışarıdan filtreli veri gelmişse onu kullan, 
+            // yoksa veritabanından ANALİZLERİ (veya harcamaları) çek.
             var history = await _databaseService.GetAnalysesAsync();
+
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 if (HistoryList != null)
                 {
-                    HistoryList.ItemsSource = history;
+                    // Eğer liste boşsa
+                    if (history == null || !history.Any())
+                    {
+                        HistoryList.ItemsSource = null;
+                        // NoHistoryLabel.IsVisible = true; // Eğer böyle bir label'ın varsa
+                    }
+                    else
+                    {
+                        // Analizleri tarih sırasına göre basıyoruz
+                        HistoryList.ItemsSource = history.OrderByDescending(x => x.KayitTarihi).ToList();
+                        // NoHistoryLabel.IsVisible = false;
+                    }
                 }
             });
         }
@@ -250,14 +336,14 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private async Task UpdateChart()
+    private async Task UpdateChart(List<Expense> filterData = null)
     {
         try
         {
             // Veritabanının yazma işlemini tamamlaması için çok kısa bir bekleme (opsiyonel ama güvenlidir)
             await Task.Delay(100);
 
-            var allExpenses = await _databaseService.GetExpensesAsync();
+            var allExpenses = filterData ?? await _databaseService.GetExpensesAsync();
 
             if (allExpenses == null || !allExpenses.Any())
             {
@@ -378,4 +464,50 @@ public partial class MainPage : ContentPage
         // Aynı şekilde popup'ı açıyoruz
         OnAddExpenseClicked(sender, e);
     }
+
+    private async void OnCategorySelected(object sender, EventArgs e)
+    {
+        var picker = (Picker)sender;
+        int selectedIndex = picker.SelectedIndex;
+
+        if (selectedIndex != -1)
+        {
+            string selectedCategory = picker.Items[selectedIndex];
+
+            // 1. Miktarın girilip girilmediğini kontrol et
+            if (string.IsNullOrWhiteSpace(BudgetEntry.Text))
+            {
+                await DisplayAlert("Uyarı", "Lütfen önce harcama miktarını girin.", "Tamam");
+                picker.SelectedIndex = -1; // Seçimi sıfırla ki tekrar seçebilsin
+                return;
+            }
+
+            if (double.TryParse(BudgetEntry.Text, out double amount))
+            {
+                // 2. Yeni harcama nesnesini oluştur (Açıklama boş kalabilir)
+                var newExpense = new Expense
+                {
+                    Amount = amount,
+                    Category = selectedCategory,
+                    Description = "Hızlı Kayıt", // Veya string.Empty diyebilirsin
+                    Date = DateTime.Now
+                };
+
+                // 3. Veritabanına kaydet
+                await _databaseService.AddExpenseAsync(newExpense);
+
+                // 4. UI'ı güncelle (Grafik ve Liste)
+                await UpdateChart();
+                await LoadHistory();
+
+                // 5. Giriş alanlarını temizle
+                BudgetEntry.Text = string.Empty;
+                picker.SelectedIndex = -1;
+
+                // Küçük bir geri bildirim (isteğe bağlı)
+                // await DisplayAlert("Başarılı", $"{selectedCategory} harcaması kaydedildi.", "Tamam");
+            }
+        }
+    }
+
 }

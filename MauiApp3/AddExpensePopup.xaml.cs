@@ -158,4 +158,43 @@ public partial class AddExpensePopup : Popup
             ScanButton.IsEnabled = true;
         }
     }
+
+    // Parametrelerin (object sender, EventArgs e) olması ŞARTTIR.
+    private async void OnCategorySelected(object sender, EventArgs e)
+    {
+        var picker = (Picker)sender;
+        int selectedIndex = picker.SelectedIndex;
+
+        if (selectedIndex != -1)
+        {
+            string selectedCategory = picker.Items[selectedIndex];
+
+            // 1. Miktar girişini kontrol et (Entry ismin neyse onu kullan, örn: AmountEntry)
+            if (string.IsNullOrWhiteSpace(AmountEntry.Text) || !double.TryParse(AmountEntry.Text, out double amount))
+            {
+                await Application.Current.MainPage.DisplayAlert("Uyarı", "Lütfen önce miktarı girin.", "Tamam");
+                picker.SelectedIndex = -1; // Seçimi temizle
+                return;
+            }
+
+            // 2. Harcama nesnesini oluştur
+            var newExpense = new Expense
+            {
+                Amount = amount,
+                Category = selectedCategory,
+                Description = "Hızlı Kayıt",
+                Date = DateTime.Now
+            };
+
+            // 3. Veritabanına kaydet (Hata vermedi dediğin metot)
+            await _dbService.AddExpenseAsync(newExpense);
+
+            // 4. Popup'ı kapat (Harcama kaydedildi)
+            // Eğer CommunityToolkit Popup kullanıyorsan:
+            // Close(); 
+        }
+    }
+
+
+
 }

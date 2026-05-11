@@ -34,21 +34,38 @@
                  Clicked="OnPickPhotoClicked"
                  HeightRequest="30" WidthRequest="30"
                  VerticalOptions="Center"/>
+        
         <ScrollView>
-                <VerticalStackLayout Padding="20" Spacing="15" BackgroundColor="White">
+            <VerticalStackLayout Padding="20" Spacing="15" BackgroundColor="White">
+                <Frame CornerRadius="12" Padding="5" BackgroundColor="#F2F2F7" HasShadow="False" BorderColor="#D1D1D6">
+                    <VerticalStackLayout Padding="10">
+                        <Label Text="Üniversiteniz" FontSize="11" TextColor="Gray"/>
+                        <Entry x:Name="UniEntry" Placeholder="Üniversite adını girin..." TextColor="Black" FontSize="16"/>
+                    </VerticalStackLayout>
+                </Frame>
 
-                    <Frame CornerRadius="12" Padding="5" BackgroundColor="#F2F2F7" HasShadow="False" BorderColor="#D1D1D6">
-                        <VerticalStackLayout Padding="10">
-                            <Label Text="Üniversiteniz" FontSize="11" TextColor="Gray"/>
-                            <Entry x:Name="UniEntry" Placeholder="Üniversite adını girin..." TextColor="Black" FontSize="16"/>
-                        </VerticalStackLayout>
-                    </Frame>
+                <Border BackgroundColor="White" 
+                    Stroke="#2196F3" 
+                    StrokeShape="RoundRectangle 10" 
+                    Padding="5" 
+                    HeightRequest="50">
+                    <Picker x:Name="TimeFilterPicker" 
+                        Title="Filtrele" 
+                        SelectedIndexChanged="OnFilterChanged">
+                        <Picker.Items>
+                            <x:String>Bugün</x:String>
+                            <x:String>Bu Hafta</x:String>
+                            <x:String>Bu Ay</x:String>
+                        </Picker.Items>
+                    </Picker>
+                </Border>
 
-                    <microcharts:ChartView x:Name="MyChartView" HeightRequest="220" BackgroundColor="White" />
-
-                    <VerticalStackLayout Spacing="5" Margin="0,5">
+                <microcharts:ChartView x:Name="MyChartView" HeightRequest="220" BackgroundColor="White"/>
+                
+                <VerticalStackLayout Spacing="5" Margin="0,5">
                         <Label Text="Bugünkü Bütçeniz" FontSize="13" HorizontalOptions="Center" TextColor="#3A3A3C"/>
                     <Slider x:Name="BudgetSlider" Minimum="100" Maximum="10000" MinimumTrackColor="#2196F3" MaximumTrackColor="#E5E5EA" ThumbColor="#2196F3" ValueChanged="OnSliderValueChanged"/>
+                    <Entry x:Name="BudgetEntry" Grid.Column="1" Text="100" Keyboard="Numeric" HorizontalTextAlignment="Center" TextChanged="OnBudgetEntryChanged" BackgroundColor="Black"/>
                         <Label x:Name="BudgetValueLabel" Text="100 TL" FontSize="26" FontAttributes="Bold" HorizontalOptions="Center" TextColor="#2196F3"/>
                     </VerticalStackLayout>
 
@@ -95,13 +112,14 @@
                                 SelectionMode="Single"
                                 SelectionChanged="OnHistorySelectionChanged"
                                 HeightRequest="300"
+                                    VerticalOptions="FillAndExpand"
                                 EmptyView="Henüz bir analiz bulunmuyor.">
                         <CollectionView.ItemTemplate>
                             <DataTemplate>
                                 <Border StrokeShape="RoundRectangle 10" BackgroundColor="#F8F9FA" Margin="0,4" Padding="12" Stroke="#E0E0E0">
                                     <Grid ColumnDefinitions="*, Auto">
-                                        <VerticalStackLayout Grid.Column="0">
-                                            <Label Text="{Binding KayitTarihi, StringFormat='{0:dd MMM yyyy - HH:mm}'}" FontSize="10" TextColor="Gray" />
+                                    <VerticalStackLayout Grid.Column="0">
+                                        <Label Text="{Binding KayitTarihi, StringFormat='{0:dd MMM yyyy - HH:mm}'}" FontSize="10" TextColor="Gray" />
                                             <Label Text="{Binding tavsiye}" FontSize="13" TextColor="Black" MaxLines="2" />
                                         </VerticalStackLayout>
                                         <Label Grid.Column="1" Text="〉" FontSize="18" TextColor="#BDBDBD" VerticalOptions="Center" />

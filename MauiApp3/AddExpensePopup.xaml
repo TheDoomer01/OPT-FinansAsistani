@@ -12,7 +12,7 @@
             <Entry x:Name="DescEntry" Placeholder="Açıklama (Örn: Yemekhane)" PlaceholderColor="Gray" TextColor="Black"/>
             <Entry x:Name="AmountEntry" Placeholder="Tutar (TL)" Keyboard="Numeric" PlaceholderColor="Gray" TextColor="Black" />
 
-            <Picker x:Name="CategoryPicker" Title="Kategori Seçin" TextColor="Black">
+            <Picker x:Name="CategoryPicker" Title="Kategori Seçin" TextColor="Black" SelectedIndexChanged="OnCategorySelected">
                 <Picker.ItemsSource>
                     <x:Array Type="{x:Type x:String}">
                         <x:String>Yemek</x:String>

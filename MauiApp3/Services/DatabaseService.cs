@@ -55,5 +55,19 @@ namespace MauiApp3.Services
             await Init();
             return await _db.Table<FinanceData>().OrderByDescending(x => x.KayitTarihi).ToListAsync();
         }
+
+        public async Task<List<Expense>> GetSpendingsByDateAsync(int days)
+        {
+            await Init(); // Veritabanının hazır olduğundan emin oluyoruz
+
+            // Hangi tarihten sonrasını alacağımızı hesaplıyoruz
+            // days = 1 ise dünden beri, 7 ise geçen haftadan beri
+            var cutoffDate = DateTime.Now.AddDays(-days);
+
+            return await _db.Table<Expense>()
+                                  .Where(x => x.Date >= cutoffDate)
+                                  .OrderByDescending(x => x.Date) // En yeniler en üstte
+                                  .ToListAsync();
+        }
     }
 }
