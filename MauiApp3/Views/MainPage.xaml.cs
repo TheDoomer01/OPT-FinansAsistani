@@ -9,7 +9,9 @@ using Microcharts.Maui;
 using Microsoft.Maui.Controls.Shapes;
 using Newtonsoft.Json;
 using SkiaSharp;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Windows.Input;
 
 namespace MauiApp3.Views;
 
@@ -19,35 +21,52 @@ public partial class MainPage : ContentPage
     private readonly DatabaseService _databaseService;
     private bool isExpanded = false;
 
+    public ObservableCollection<FinanceData> HistoryItems { get; set; } = new();
+
+    // Geçmiş öğelere tıklamayı algılayacak Komut (Command) eklendi
+    public ICommand SelectHistoryCommand { get; set; }
+
     public MainPage(GeminiService geminiService, DatabaseService databaseService)
     {
         InitializeComponent();
 
-        // Servisleri güvenli yuvalarına atıyoruz
         _geminiService = geminiService;
         _databaseService = databaseService;
 
-        // DÜZELTME 1: Havada duran kodlar buraya, metodun içine alındı.
+        // Kullanıcı geçmişteki bir analize tıkladığında çalışacak kod parçası
+        SelectHistoryCommand = new Command<FinanceData>((data) =>
+        {
+            if (data != null)
+            {
+                // Seçilen veriyi alıp Popup olarak ekranda gösteriyoruz
+                this.ShowPopup(new AnalysisPopup(data));
+            }
+        });
+
+        BindingContext = this;
+
         var savedUni = UserSession.University;
         UniEntry.Text = string.IsNullOrEmpty(savedUni) ? "" : savedUni;
 
         Dispatcher.Dispatch(async () =>
         {
-            await Task.Delay(500);
-            UpdateChart();
-            LoadHistory();
+            await Task.Delay(300);
+            await UpdateChart();
+            await LoadHistory();
         });
     }
+
     void OnUniEntryUnfocused(object sender, FocusEventArgs e)
     {
         UserSession.University = UniEntry.Text;
         Preferences.Default.Remove("LastFinanceData");
     }
+
     private async void OnAddExpenseClicked(object sender, EventArgs e)
     {
         var popup = new AddExpensePopup(_databaseService, _geminiService);
         await this.ShowPopupAsync(popup);
-        // Popup tamamen kapandıktan sonra bizim oluşturduğumuz bayrağı (IsSuccess) kontrol ediyoruz!
+
         if (popup.IsSuccess)
         {
             await UpdateChart();
@@ -57,25 +76,21 @@ public partial class MainPage : ContentPage
 
     void OnSliderValueChanged(object sender, ValueChangedEventArgs e)
     {
-        double stepValue = Math.Round(e.NewValue);
-        BudgetSlider.Value = stepValue; // Tam sayıya yuvarla
+        double value = Math.Round(e.NewValue);
+        BudgetValueLabel.Text = $"{value:0} TL";
 
-        // Entry'nin TextChanged olayını tetiklememesi için kontrol edebiliriz
-        if (BudgetEntry.Text != stepValue.ToString())
-        {
-            BudgetEntry.Text = stepValue.ToString();
-        }
+        // Değer değiştiğinde Text'i sadece eğer farklıysa güncelle, yoksa sonsuz döngüye girer
+        if (BudgetEntry.Text != value.ToString())
+            BudgetEntry.Text = value.ToString();
     }
 
     void OnBudgetEntryChanged(object sender, TextChangedEventArgs e)
     {
-        if (double.TryParse(e.NewTextValue, out double result))
+        if (double.TryParse(e.NewTextValue, out double val))
         {
-            // Slider limitleri içindeyse güncelle
-            if (result >= BudgetSlider.Minimum && result <= BudgetSlider.Maximum)
-            {
-                BudgetSlider.Value = result;
-            }
+            // Yazı değiştiğinde Slider'ı sadece eğer farklıysa güncelle
+            if (BudgetSlider.Value != val)
+                BudgetSlider.Value = val;
         }
     }
 
@@ -94,14 +109,12 @@ public partial class MainPage : ContentPage
         }
     }
 
-    // --- ÖNCE BU YARDIMCI METODU EKLE (OnAnalyzeClicked metodunun dışına) ---
     private async Task<string> GetSpendingSummaryAsync()
     {
         var expenses = await _databaseService.GetExpensesAsync();
         if (expenses == null || !expenses.Any())
             return "Henüz hiç harcama girilmedi.";
 
-        // Son 10 harcamayı Gemini'nin anlayacağı bir metne çeviriyoruz
         var summary = expenses.OrderByDescending(x => x.Date).Take(10)
             .Select(x => $"{x.Category}: {x.Amount}TL")
             .ToList();
@@ -117,13 +130,12 @@ public partial class MainPage : ContentPage
         int days = 0;
         switch (selectedIndex)
         {
-            case 0: days = 1; break;  // Bugün
-            case 1: days = 7; break;  // 1 Hafta
-            case 2: days = 30; break; // 1 Ay
-            case 3: days = 365; break; // Tümü
+            case 0: days = 1; break;
+            case 1: days = 7; break;
+            case 2: days = 30; break;
+            case 3: days = 365; break;
         }
 
-        // Filtreye göre verileri tekrar çek ve grafiği güncelle
         await RefreshDataWithFilter(days);
     }
 
@@ -131,151 +143,85 @@ public partial class MainPage : ContentPage
     {
         try
         {
-            // 1. Veritabanından filtrelenmiş listeyi çek
+            // 1. Veritabanından sadece seçilen tarih aralığındaki harcamaları çekiyoruz
             var filteredList = await _databaseService.GetSpendingsByDateAsync(days);
 
             if (filteredList == null) return;
 
-            // 2. Grafiği bu listeye göre tekrar çiz
-            // Not: UpdateChart 'Task' olduğu için await kullanmalısın
+            // 2. Grafiği ve hemen altındaki mini harcama listesini filtrelenmiş verilerle güncelliyoruz
+            // UpdateChart metodu zaten kendi içinde UI güncellemelerini yapıyor.
             await UpdateChart(filteredList);
 
-            // 3. Alt taraftaki geçmiş listesini güncelle
-            // 'ItemsSource'un başına HistoryList ekledik
-            if (HistoryList != null)
-            {
-                HistoryList.ItemsSource = filteredList.OrderByDescending(x => x.Date).ToList();
-            }
-
-            // 5. Toplam tutarı yeniden hesapla
-            double total = filteredList.Sum(x => x.Amount);
-            if (TotalExpenseLabel != null)
-            {
-                TotalExpenseLabel.Text = $"{total:N0} ₺";
-            }
-        }
-        catch (Exception ex)
-        {
-            await DisplayAlert("Hata", "Filtreleme yapılamadı: " + ex.Message, "Tamam");
-        }
-    }
-
-    // --- ŞİMDİ ANA METODUN GÜNCEL HALİ ---
-    async void OnAnalyzeClicked(object sender, EventArgs e)
-    {
-        var selectedBudget = Math.Round(BudgetSlider.Value);
-
-        // 1. KOTA/HIZ KONTROLÜ (Cache)
-        // Eğer son 1 saat içinde bir analiz yapıldıysa, API'yi yormadan eskiyi getir
-        string cachedJson = Preferences.Default.Get("LastFinanceData", string.Empty);
-        if (!string.IsNullOrEmpty(cachedJson))
-        {
-            var cachedData = JsonConvert.DeserializeObject<FinanceData>(cachedJson);
-            // Eğer üzerinden 1 saat geçmediyse ve veritabanına yeni harcama eklenmediyse bunu göster
-            // (Geliştirme aşamasında burayı yorum satırı yapabilirsin ki her seferinde yeni cevap gelsin)
-            /*
-            if (cachedData != null && (DateTime.Now - cachedData.KayitTarihi).TotalHours < 1)
-            {
-                this.ShowPopup(new AnalysisPopup(cachedData));
-                return;
-            }
-        }
-            */
-            try
-            {
-                // UI Hazırlığı
-                AnalyzeButton.IsEnabled = false;
-                LoadingIndicator.IsVisible = true;
-                LoadingIndicator.IsRunning = true;
-
-                await Task.Delay(2000);
-
-                // 2. VERİLERİ TOPLA (İşte kritik nokta burası!)
-                // GetSpendingSummaryAsync metodun veritabanından harcamaları string olarak getiriyor olmalı
-                string spendingData = await GetSpendingSummaryAsync();
-
-                if (string.IsNullOrEmpty(spendingData)) spendingData = "Henüz harcama kaydı bulunmuyor.";
-
-                // 3. TEK VE GÜÇLÜ PROMPT
-                string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcı {UserSession.University} öğrencisi. " +
-                                $"Bugünkü bütçesi: {selectedBudget} TL. " +
-                                $"Son harcamaları ve kategorileri: {spendingData}. " +
-                                "Bu verilere dayanarak; harcamaların bütçeye oranını analiz et, öğrenciye özel tasarruf " +
-                                "tavsiyeleri ve komik/ilginç finansal haber başlıkları üret. " +
-                                "Cevabı SADECE şu JSON formatında ver: " +
-                                "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
-
-                // 4. GEMINI SERVİS ÇAĞRISI
-                var response = await _geminiService.GetResponseAsync(prompt);
-
-                // JSON Ayıklama
-                int start = response.IndexOf("{");
-                int end = response.LastIndexOf("}");
-
-                if (start >= 0 && end >= 0)
-                {
-                    response = response.Substring(start, (end - start) + 1);
-                    var result = JsonConvert.DeserializeObject<FinanceData>(response);
-
-                    if (result != null)
-                    {
-                        result.KayitTarihi = DateTime.Now;
-
-                        UpdateUI(result); // Bu satırı eklediğin an UpdateUI kodu parlayacak!
-
-                        // 5. KAYITLAR (SQLite ve Cache)
-                        await _databaseService.AddAnalysisAsync(result);
-                        Preferences.Default.Set("LastFinanceData", JsonConvert.SerializeObject(result));
-
-                        // 6. GÖSTERİM
-                        this.ShowPopup(new AnalysisPopup(result));
-                        LoadHistory(); // Ana sayfadaki listeyi tazele
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlert("Hata", "Analiz sırasında bir sorun oluştu: " + ex.Message, "Tamam");
-            }
-            finally
-            {
-                LoadingIndicator.IsVisible = false;
-                LoadingIndicator.IsRunning = false;
-                AnalyzeButton.IsEnabled = true;
-            }
-        }
-    }
-    // 'List<Expense> filterData = null' ekleyerek dışarıdan veri alabilir hale getirdik
-    private async Task LoadHistory()
-    {
-        try
-        {
-            // 1. Eğer dışarıdan filtreli veri gelmişse onu kullan, 
-            // yoksa veritabanından ANALİZLERİ (veya harcamaları) çek.
-            var history = await _databaseService.GetAnalysesAsync();
-
+            // 3. Ortadaki Toplam Tutar etiketini UI (Arayüz) thread'inde güncelliyoruz
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                if (HistoryList != null)
-                {
-                    // Eğer liste boşsa
-                    if (history == null || !history.Any())
-                    {
-                        HistoryList.ItemsSource = null;
-                        // NoHistoryLabel.IsVisible = true; // Eğer böyle bir label'ın varsa
-                    }
-                    else
-                    {
-                        // Analizleri tarih sırasına göre basıyoruz
-                        HistoryList.ItemsSource = history.OrderByDescending(x => x.KayitTarihi).ToList();
-                        // NoHistoryLabel.IsVisible = false;
-                    }
-                }
+                // HATA DÜZELTİLDİ: HistoryItems listesine müdahale eden döngü buradan kaldırıldı!
+                // Artık yapay zeka geçmiş analizleri harcamalarla karışmayacak.
+                TotalExpenseLabel.Text = $"{filteredList.Sum(x => x.Amount):N0} ₺";
             });
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Hata: {ex.Message}");
+            await DisplayAlert("Hata", "Filtreleme sırasında bir sorun oluştu: " + ex.Message, "OK");
+        }
+    }
+    async void OnAnalyzeClicked(object sender, EventArgs e)
+    {
+        var selectedBudget = Math.Round(BudgetSlider.Value);
+        string cachedJson = Preferences.Default.Get("LastFinanceData", string.Empty);
+
+        try
+        {
+            AnalyzeButton.IsEnabled = false;
+            LoadingIndicator.IsVisible = true;
+            LoadingIndicator.IsRunning = true;
+
+            await Task.Delay(2000);
+
+            string spendingData = await GetSpendingSummaryAsync();
+            if (string.IsNullOrEmpty(spendingData)) spendingData = "Henüz harcama kaydı bulunmuyor.";
+
+            string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcı {UserSession.University} öğrencisi. " +
+                            $"Bugünkü bütçesi: {selectedBudget} TL. " +
+                            $"Son harcamaları ve kategorileri: {spendingData}. " +
+                            "Bu verilere dayanarak; harcamaların bütçeye oranını analiz et, öğrenciye özel tasarruf " +
+                            "tavsiyeleri ve komik/ilginç finansal haber başlıkları üret. " +
+                            "Cevabı SADECE şu JSON formatında ver: " +
+                            "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+
+            var response = await _geminiService.GetResponseAsync(prompt);
+
+            int start = response.IndexOf("{");
+            int end = response.LastIndexOf("}");
+
+            if (start >= 0 && end >= 0)
+            {
+                response = response.Substring(start, (end - start) + 1);
+                var result = JsonConvert.DeserializeObject<FinanceData>(response);
+
+                if (result != null)
+                {
+                    result.KayitTarihi = DateTime.Now;
+
+                    UpdateUI(result);
+
+                    await _databaseService.AddAnalysisAsync(result);
+                    Preferences.Default.Set("LastFinanceData", JsonConvert.SerializeObject(result));
+
+                    this.ShowPopup(new AnalysisPopup(result));
+                    _ = LoadHistory(); // Task ateşleyip geçiyoruz
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Hata", "Analiz sırasında bir sorun oluştu: " + ex.Message, "Tamam");
+        }
+        finally
+        {
+            LoadingIndicator.IsVisible = false;
+            LoadingIndicator.IsRunning = false;
+            AnalyzeButton.IsEnabled = true;
         }
     }
 
@@ -286,7 +232,6 @@ public partial class MainPage : ContentPage
         {
             AdviceLabel.Text = data.tavsiye ?? "Tavsiye boş.";
 
-            // Haberleri Gösterme Mantığı
             if (data.haberler != null && data.haberler.Count > 0)
             {
                 NewsLabel.Text = "• " + string.Join("\n\n• ", data.haberler);
@@ -325,39 +270,44 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async Task LoadHistory()
     {
-        var selectedData = e.CurrentSelection.FirstOrDefault() as FinanceData;
+        var history = await _databaseService.GetAnalysesAsync();
 
-        if (selectedData != null)
+        MainThread.BeginInvokeOnMainThread(() =>
         {
-            this.ShowPopup(new AnalysisPopup(selectedData));
-            ((CollectionView)sender).SelectedItem = null;
-        }
+            HistoryItems.Clear();
+
+            if (history == null) return;
+
+            // .Take(4) sınırını kaldırdık. 
+            // Tüm listeyi tarihe göre azalan (en yeni en üstte) şekilde sıralayıp ekliyoruz.
+            foreach (var item in history.OrderByDescending(x => x.KayitTarihi))
+            {
+                HistoryItems.Add(item);
+            }
+        });
     }
 
     private async Task UpdateChart(List<Expense> filterData = null)
     {
         try
         {
-            // Veritabanının yazma işlemini tamamlaması için çok kısa bir bekleme (opsiyonel ama güvenlidir)
             await Task.Delay(100);
 
             var allExpenses = filterData ?? await _databaseService.GetExpensesAsync();
 
             if (allExpenses == null || !allExpenses.Any())
             {
-                // UI işlemlerini ana thread'de yapalım
                 MainThread.BeginInvokeOnMainThread(() => {
-                    // Veri yoksa şık bir "Boş" halka çizdir
                     var emptyEntries = new List<ChartEntry> {
-            new ChartEntry(1) { Color = SKColor.Parse("#E0E0E0") } // Açık gri bir halka
-        };
+                        new ChartEntry(1) { Color = SKColor.Parse("#E0E0E0") }
+                    };
                     ExpenseChartView.Chart = new DonutChart
                     {
                         Entries = emptyEntries,
                         BackgroundColor = SKColors.Transparent,
-                        LabelColor = SKColor.Parse("#333333"), // Yazıları gerekirse Colors.White yapabilirsin
+                        LabelColor = SKColor.Parse("#333333"),
                         HoleRadius = 0.6f
                     };
                     if (TotalExpenseLabel != null) TotalExpenseLabel.Text = "0 ₺";
@@ -368,8 +318,8 @@ public partial class MainPage : ContentPage
             var categoryTotals = allExpenses
                 .GroupBy(e => string.IsNullOrWhiteSpace(e.Category) ? "DİĞER" : e.Category.Trim().ToUpper())
                 .Select(g => new {
-                Category = g.Key,
-                Total = g.Sum(e => e.Amount)
+                    Category = g.Key,
+                    Total = g.Sum(e => e.Amount)
                 }).ToList();
 
             var entries = new List<ChartEntry>();
@@ -387,30 +337,24 @@ public partial class MainPage : ContentPage
                 colorIndex++;
             }
 
-            // Toplamı hesapla
             var totalSpent = allExpenses.Sum(e => e.Amount);
 
-            // ARAYÜZ GÜNCELLEMELERİ (Mutlaka MainThread içinde)
             MainThread.BeginInvokeOnMainThread(() => {
                 TotalExpenseLabel.Text = totalSpent.ToString("N0") + " ₺";
-
-                // Yeni grafik nesnesini oluştur ve ata
                 ExpenseChartView.Chart = new DonutChart
                 {
                     Entries = entries,
                     LabelTextSize = 20,
-                    // EKSTRA: Etiketlerin duruşunu değiştirerek çakışmayı azaltabilirsin
-                    // LabelMode.Horizontal (Yatay) veya LabelMode.None (Hiç gösterme)
                     LabelMode = LabelMode.None,
                     Typeface = SKTypeface.FromFamilyName("Arial"),
-                    BackgroundColor = SKColors.White, 
-                    LabelColor = SKColor.Parse("#333333"),  // Koyu gri/Siyah yazılar (ARTIK GÖRÜNECEK!)
-                    HoleRadius = 0.7f, // İçerideki boşluğu biraz artırırsan daha modern durur
-                    GraphPosition = GraphPosition.Center // Grafiği merkeze hizalar
+                    BackgroundColor = SKColors.White,
+                    LabelColor = SKColor.Parse("#333333"),
+                    HoleRadius = 0.7f,
+                    GraphPosition = GraphPosition.Center
                 };
             });
-            MiniExpenseList.Children.Clear();
 
+            MiniExpenseList.Children.Clear();
             var recentExpenses = allExpenses.OrderByDescending(x => x.Date).Take(5);
 
             foreach (var exp in recentExpenses)
@@ -422,9 +366,9 @@ public partial class MainPage : ContentPage
                     Content = new VerticalStackLayout
                     {
                         Children = {
-                    new Label { Text = exp.Category, FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = Colors.Black },
-                    new Label { Text = exp.Amount.ToString("C"), FontSize = 10, TextColor = Colors.DarkGreen }
-                }
+                            new Label { Text = exp.Category, FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = Colors.Black },
+                            new Label { Text = exp.Amount.ToString("C"), FontSize = 10, TextColor = Colors.DarkGreen }
+                        }
                     }
                 };
                 MiniExpenseList.Children.Add(frame);
@@ -438,7 +382,6 @@ public partial class MainPage : ContentPage
 
     private async void OnChartTapped(object sender, TappedEventArgs e)
     {
-        // Veritabanından o anki toplam harcamayı hızlıca alalım
         var expenses = await _databaseService.GetExpensesAsync();
 
         if (expenses != null && expenses.Any())
@@ -451,63 +394,14 @@ public partial class MainPage : ContentPage
             await DisplayAlert("Bilgi", "Henüz bir harcama girmediniz.", "Tamam");
         }
     }
-    // Üst bardaki 'Tara' butonuna basınca çalışır
+
     private async void OnScanReceiptClicked(object sender, EventArgs e)
     {
-        // Toolbar'dan tıklandığında direkt Harcama Ekle popup'ını açıyoruz
         OnAddExpenseClicked(sender, e);
     }
 
-    // Üst bardaki 'Galeri' butonuna basınca çalışır
     private async void OnPickPhotoClicked(object sender, EventArgs e)
     {
-        // Aynı şekilde popup'ı açıyoruz
         OnAddExpenseClicked(sender, e);
     }
-
-    private async void OnCategorySelected(object sender, EventArgs e)
-    {
-        var picker = (Picker)sender;
-        int selectedIndex = picker.SelectedIndex;
-
-        if (selectedIndex != -1)
-        {
-            string selectedCategory = picker.Items[selectedIndex];
-
-            // 1. Miktarın girilip girilmediğini kontrol et
-            if (string.IsNullOrWhiteSpace(BudgetEntry.Text))
-            {
-                await DisplayAlert("Uyarı", "Lütfen önce harcama miktarını girin.", "Tamam");
-                picker.SelectedIndex = -1; // Seçimi sıfırla ki tekrar seçebilsin
-                return;
-            }
-
-            if (double.TryParse(BudgetEntry.Text, out double amount))
-            {
-                // 2. Yeni harcama nesnesini oluştur (Açıklama boş kalabilir)
-                var newExpense = new Expense
-                {
-                    Amount = amount,
-                    Category = selectedCategory,
-                    Description = "Hızlı Kayıt", // Veya string.Empty diyebilirsin
-                    Date = DateTime.Now
-                };
-
-                // 3. Veritabanına kaydet
-                await _databaseService.AddExpenseAsync(newExpense);
-
-                // 4. UI'ı güncelle (Grafik ve Liste)
-                await UpdateChart();
-                await LoadHistory();
-
-                // 5. Giriş alanlarını temizle
-                BudgetEntry.Text = string.Empty;
-                picker.SelectedIndex = -1;
-
-                // Küçük bir geri bildirim (isteğe bağlı)
-                // await DisplayAlert("Başarılı", $"{selectedCategory} harcaması kaydedildi.", "Tamam");
-            }
-        }
-    }
-
 }

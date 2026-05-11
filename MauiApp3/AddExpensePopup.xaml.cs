@@ -165,7 +165,8 @@ public partial class AddExpensePopup : Popup
         var picker = (Picker)sender;
         int selectedIndex = picker.SelectedIndex;
 
-        if (selectedIndex != -1)
+        // Eğer yanlışlıkla tetiklendiyse veya seçim boşsa çık
+        if (selectedIndex != -1) return;
         {
             string selectedCategory = picker.Items[selectedIndex];
 
@@ -186,15 +187,18 @@ public partial class AddExpensePopup : Popup
                 Date = DateTime.Now
             };
 
-            // 3. Veritabanına kaydet (Hata vermedi dediğin metot)
-            await _dbService.AddExpenseAsync(newExpense);
+            try
+            {
 
-            // 4. Popup'ı kapat (Harcama kaydedildi)
-            // Eğer CommunityToolkit Popup kullanıyorsan:
-            // Close(); 
+                // 3. Veritabanına kaydet (Hata vermedi dediğin metot)
+                await _dbService.AddExpenseAsync(newExpense);
+
+            }
+            catch (Exception ex)
+            {
+                await Application.Current.MainPage.DisplayAlert("Hata", "Kaydedilirken bir sorun oluştu: " + ex.Message, "Tamam");
+            }
+            
         }
     }
-
-
-
 }

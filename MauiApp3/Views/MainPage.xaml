@@ -1,136 +1,148 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:micro="clr-namespace:Microcharts.Maui;assembly=Microcharts.Maui"
-             xmlns:microcharts="clr-namespace:Microcharts.Maui;assembly=Microcharts.Maui"
-             NavigationPage.HasNavigationBar="True"
-             x:Class="MauiApp3.Views.MainPage"
-             BackgroundColor="White">
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:micro="clr-namespace:Microcharts.Maui;assembly=Microcharts.Maui"
+    x:Class="MauiApp3.Views.MainPage"
+    BackgroundColor="#F5F7FA"
+    NavigationPage.HasNavigationBar="True">
 
+    <!-- TOOLBAR -->
     <ContentPage.ToolbarItems>
-        <ToolbarItem Text="📷 Tara" Clicked="OnScanReceiptClicked" Priority="0" Order="Primary"/>
-        <ToolbarItem Text="🖼️ Galeri" Clicked="OnPickPhotoClicked" Priority="1" Order="Primary"/>
-        <ToolbarItem Text="⚙️ Ayarlar" Clicked="OnSettingsClicked" Priority="2" Order="Secondary"/>
+        <ToolbarItem Text="📷 Tara" Clicked="OnScanReceiptClicked"/>
+        <ToolbarItem Text="🖼️ Galeri" Clicked="OnPickPhotoClicked"/>
+        <ToolbarItem Text="⚙️ Ayarlar" Clicked="OnSettingsClicked"/>
     </ContentPage.ToolbarItems>
 
-    <Grid ColumnDefinitions="*, Auto, Auto" 
-      Padding="20,40,20,10" 
-      BackgroundColor="#F8F9FA">
+    <!-- MAIN SCROLL -->
+    <ScrollView>
+        <VerticalStackLayout Padding="16, 16, 16, 100" Spacing="18">
 
-        <VerticalStackLayout Grid.Column="0" VerticalOptions="Center">
-            <Label Text="Merhaba 👋" FontSize="14" TextColor="Gray"/>
-            <Label Text="BUÜ Finans Asistanı" FontSize="18" FontAttributes="Bold" TextColor="#1C1C1E"/>
-        </VerticalStackLayout>
+            <!-- HEADER -->
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <VerticalStackLayout>
+                    <Label Text="Merhaba 👋" FontSize="14" TextColor="Gray"/>
+                    <Label Text="ÖPT Finans Asistanı" FontSize="24" FontAttributes="Bold" TextColor="#1C1C1E"/>
+                </VerticalStackLayout>
 
-        <ImageButton Grid.Column="1" 
-                 Source="camera_icon.png" 
-                 Clicked="OnScanReceiptClicked"
-                 HeightRequest="30" WidthRequest="30"
-                 Margin="0,0,15,0"
-                 VerticalOptions="Center"/>
+                <ImageButton Grid.Column="1" Source="camera_icon.png" HeightRequest="28" WidthRequest="28" Margin="0,0,12,0" BackgroundColor="Transparent" Clicked="OnScanReceiptClicked"/>
+                <ImageButton Grid.Column="2" Source="gallery_icon.png" HeightRequest="28" WidthRequest="28" BackgroundColor="Transparent" Clicked="OnPickPhotoClicked"/>
+            </Grid>
 
-        <ImageButton Grid.Column="2" 
-                 Source="gallery_icon.png" 
-                 Clicked="OnPickPhotoClicked"
-                 HeightRequest="30" WidthRequest="30"
-                 VerticalOptions="Center"/>
-        
-        <ScrollView>
-            <VerticalStackLayout Padding="20" Spacing="15" BackgroundColor="White">
-                <Frame CornerRadius="12" Padding="5" BackgroundColor="#F2F2F7" HasShadow="False" BorderColor="#D1D1D6">
-                    <VerticalStackLayout Padding="10">
-                        <Label Text="Üniversiteniz" FontSize="11" TextColor="Gray"/>
-                        <Entry x:Name="UniEntry" Placeholder="Üniversite adını girin..." TextColor="Black" FontSize="16"/>
-                    </VerticalStackLayout>
-                </Frame>
+            <!-- ÜNİVERSİTE -->
+            <Frame CornerRadius="14" HasShadow="False" BorderColor="#E0E0E0" BackgroundColor="White" Padding="14">
+                <VerticalStackLayout Spacing="5">
+                    <Label Text="Üniversiteniz" FontSize="12" TextColor="Gray"/>
+                    <Entry x:Name="UniEntry" Placeholder="Üniversite adını girin..." FontSize="16" TextColor="Black"/>
+                </VerticalStackLayout>
+            </Frame>
 
-                <Border BackgroundColor="White" 
-                    Stroke="#2196F3" 
-                    StrokeShape="RoundRectangle 10" 
-                    Padding="5" 
-                    HeightRequest="50">
-                    <Picker x:Name="TimeFilterPicker" 
-                        Title="Filtrele" 
-                        SelectedIndexChanged="OnFilterChanged">
-                        <Picker.Items>
-                            <x:String>Bugün</x:String>
-                            <x:String>Bu Hafta</x:String>
-                            <x:String>Bu Ay</x:String>
-                        </Picker.Items>
-                    </Picker>
-                </Border>
+            <!-- FILTER -->
+            <Border Stroke="#2196F3" StrokeShape="RoundRectangle 12" BackgroundColor="White" Padding="10">
+                <Picker x:Name="TimeFilterPicker" Title="Filtrele" TitleColor="#2196F3" SelectedIndexChanged="OnFilterChanged">
+                    <Picker.Items>
+                        <x:String>Bugün</x:String>
+                        <x:String>Bu Hafta</x:String>
+                        <x:String>Bu Ay</x:String>
+                    </Picker.Items>
+                </Picker>
+            </Border>
 
-                <microcharts:ChartView x:Name="MyChartView" HeightRequest="220" BackgroundColor="White"/>
-                
-                <VerticalStackLayout Spacing="5" Margin="0,5">
-                        <Label Text="Bugünkü Bütçeniz" FontSize="13" HorizontalOptions="Center" TextColor="#3A3A3C"/>
+            <!-- MAIN CHART -->
+            <Frame CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="10">
+                <micro:ChartView x:Name="MyChartView" HeightRequest="220"/>
+            </Frame>
+
+            <!-- BÜTÇE (DÜZELTİLEN KISIM) -->
+            <Frame CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="16">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="Bugünkü Bütçeniz" HorizontalOptions="Center" FontSize="15" TextColor="#444"/>
+
                     <Slider x:Name="BudgetSlider" Minimum="100" Maximum="10000" MinimumTrackColor="#2196F3" MaximumTrackColor="#E5E5EA" ThumbColor="#2196F3" ValueChanged="OnSliderValueChanged"/>
-                    <Entry x:Name="BudgetEntry" Grid.Column="1" Text="100" Keyboard="Numeric" HorizontalTextAlignment="Center" TextChanged="OnBudgetEntryChanged" BackgroundColor="Black"/>
-                        <Label x:Name="BudgetValueLabel" Text="100 TL" FontSize="26" FontAttributes="Bold" HorizontalOptions="Center" TextColor="#2196F3"/>
-                    </VerticalStackLayout>
 
-                    <Grid ColumnDefinitions="*, Auto" HeightRequest="230" Margin="0,10">
-                        <Grid Grid.Column="0">
-                        <micro:ChartView x:Name="ExpenseChartView" BackgroundColor="White" HeightRequest="220" WidthRequest="220"/>
-                        <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" InputTransparent="True" Spacing="0">
-                            <Label Text="Toplam" FontSize="10" TextColor="Gray" CharacterSpacing="1" HorizontalOptions="Center" FontAttributes="Bold"/>
-                                <Label x:Name="TotalExpenseLabel" Text="0 ₺" FontSize="24" FontAttributes="Bold" TextColor="Black" HorizontalOptions="Center"/>
+                    <Border Stroke="#D1D1D6" StrokeShape="RoundRectangle 10" Padding="10">
+                        <!-- TextColor eklendi ve TextChanged olayı bağlandı -->
+                        <Entry x:Name="BudgetEntry" 
+                               Keyboard="Numeric" 
+                               HorizontalTextAlignment="Center" 
+                               TextColor="Black"
+                               TextChanged="OnBudgetEntryChanged"
+                               Text="100"/>
+                    </Border>
+
+                    <Label x:Name="BudgetValueLabel" Text="100 TL" HorizontalOptions="Center" FontSize="30" FontAttributes="Bold" TextColor="#2196F3"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- EXPENSE CHART -->
+            <Frame CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="12">
+                <VerticalStackLayout Spacing="10">
+                    <Grid ColumnDefinitions="*,120">
+                        <!-- DONUT -->
+                        <Grid>
+                            <micro:ChartView x:Name="ExpenseChartView" HeightRequest="220"/>
+                            <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" InputTransparent="True">
+                                <Label Text="Toplam" FontSize="11" HorizontalOptions="Center" TextColor="Gray"/>
+                                <Label x:Name="TotalExpenseLabel" Text="0 ₺" FontSize="24" FontAttributes="Bold" HorizontalOptions="Center" TextColor="Black"/>
                             </VerticalStackLayout>
                         </Grid>
-                        <ScrollView Grid.Column="1" WidthRequest="130">
-                            <VerticalStackLayout x:Name="MiniExpenseList" Spacing="5" Padding="5" />
+
+                        <!-- MINI LIST -->
+                        <ScrollView Grid.Column="1">
+                            <VerticalStackLayout x:Name="MiniExpenseList" Spacing="8" Padding="5"/>
                         </ScrollView>
                     </Grid>
-
-                    <ActivityIndicator x:Name="LoadingIndicator" IsRunning="False" IsVisible="False" Color="#3498DB" HorizontalOptions="Center"/>
-
-                    <Button x:Name="AnalyzeButton" Text="📊 Analiz Et ve Tavsiye Al" Clicked="OnAnalyzeClicked" BackgroundColor="#3498DB" TextColor="White" CornerRadius="12" HeightRequest="50"/>
-                    <Button Text="➕ Harcama Ekle" Clicked="OnAddExpenseClicked" BackgroundColor="#4CAF50" TextColor="White" CornerRadius="12" HeightRequest="50" />
-
-                    <Frame x:Name="MiniBoard" CornerRadius="15" BackgroundColor="#F9F9F9" HasShadow="True" BorderColor="#E5E5EA">
-                        <Frame.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnBoardTapped" />
-                        </Frame.GestureRecognizers>
-                        <VerticalStackLayout Spacing="8">
-                            <Label x:Name="BoardTitle" Text="📌 Finansal Özet (Tıkla ve Gör)" FontAttributes="Bold" FontSize="15" TextColor="#1C1C1E"/>
-
-                            <VerticalStackLayout x:Name="DetailsLayout" IsVisible="False" Spacing="10">
-                                <Label Text="Günün Haberleri" FontAttributes="Bold" TextColor="#2196F3" FontSize="13"/>
-                            <Label x:Name="NewsLabel" Text="Haberler yükleniyor..." TextColor="#444" FontSize="13" MaxLines="4" LineBreakMode="TailTruncation" />
-
-                                <BoxView HeightRequest="1" Color="#DDD"/>
-
-                                <Label Text="Yatırım ve Tasarruf Tavsiyesi" FontAttributes="Bold" TextColor="#2196F3" FontSize="13"/>
-                            <Label x:Name="AdviceLabel" Text="Tavsiyeler buraya gelecek..." TextColor="#444" FontSize="13" FontAttributes="Italic" MaxLines="4" LineBreakMode="TailTruncation" />
-                            </VerticalStackLayout>
-                        </VerticalStackLayout>
-                    </Frame>
-
-                    <Label Text="📜 Geçmiş Analizler" FontSize="18" FontAttributes="Bold" TextColor="#2C3E50" Margin="0,15,0,5" />
-
-                    <CollectionView x:Name="HistoryList"
-                                SelectionMode="Single"
-                                SelectionChanged="OnHistorySelectionChanged"
-                                HeightRequest="300"
-                                    VerticalOptions="FillAndExpand"
-                                EmptyView="Henüz bir analiz bulunmuyor.">
-                        <CollectionView.ItemTemplate>
-                            <DataTemplate>
-                                <Border StrokeShape="RoundRectangle 10" BackgroundColor="#F8F9FA" Margin="0,4" Padding="12" Stroke="#E0E0E0">
-                                    <Grid ColumnDefinitions="*, Auto">
-                                    <VerticalStackLayout Grid.Column="0">
-                                        <Label Text="{Binding KayitTarihi, StringFormat='{0:dd MMM yyyy - HH:mm}'}" FontSize="10" TextColor="Gray" />
-                                            <Label Text="{Binding tavsiye}" FontSize="13" TextColor="Black" MaxLines="2" />
-                                        </VerticalStackLayout>
-                                        <Label Grid.Column="1" Text="〉" FontSize="18" TextColor="#BDBDBD" VerticalOptions="Center" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </CollectionView.ItemTemplate>
-                    </CollectionView>
-
                 </VerticalStackLayout>
-            </ScrollView>
-        </Grid>
-    </ContentPage>
-    
+            </Frame>
+
+            <!-- LOADING -->
+            <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False" IsRunning="False" Color="#2196F3" HorizontalOptions="Center"/>
+
+            <!-- BUTTONS -->
+            <HorizontalStackLayout Spacing="10">
+                <Button x:Name="AnalyzeButton" Text="📊 Analiz" HorizontalOptions="FillAndExpand" HeightRequest="52" CornerRadius="14" BackgroundColor="#2196F3" TextColor="White" Clicked="OnAnalyzeClicked"/>
+                <Button Text="➕ Ekle" HorizontalOptions="FillAndExpand" HeightRequest="52" CornerRadius="14" BackgroundColor="#4CAF50" TextColor="White" Clicked="OnAddExpenseClicked"/>
+            </HorizontalStackLayout>
+
+            <!-- FINANCIAL BOARD -->
+            <Frame x:Name="MiniBoard" CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="16">
+                <Frame.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnBoardTapped"/>
+                </Frame.GestureRecognizers>
+                <VerticalStackLayout Spacing="14">
+                    <Label x:Name="BoardTitle" Text="📌 Finansal Özet" FontSize="16" FontAttributes="Bold" TextColor="#1C1C1E"/>
+                    <VerticalStackLayout x:Name="DetailsLayout" IsVisible="False" Spacing="12">
+                        <Label Text="Günün Haberleri" FontAttributes="Bold" TextColor="#2196F3"/>
+                        <Label x:Name="NewsLabel" Text="Haberler yükleniyor..." FontSize="13" TextColor="#444"/>
+                        <BoxView HeightRequest="1" Color="#EAEAEA"/>
+                        <Label Text="Yatırım Tavsiyesi" FontAttributes="Bold" TextColor="#2196F3"/>
+                        <Label x:Name="AdviceLabel" Text="Tavsiyeler..." FontSize="13" TextColor="#444"/>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- HISTORY -->
+            <Label Text="📜 Geçmiş Analizler" FontSize="18" FontAttributes="Bold" TextColor="#2C3E50"/>
+
+            <VerticalStackLayout x:Name="HistoryList" BindableLayout.ItemsSource="{Binding HistoryItems}" Spacing="8">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate>
+                        <Frame CornerRadius="12" Padding="12" Margin="0,2" BackgroundColor="White" BorderColor="#EAEAEA" HasShadow="False">
+                            <Frame.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectHistoryCommand}" CommandParameter="{Binding .}" />
+                            </Frame.GestureRecognizers>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding KayitTarihi, StringFormat='{0:dd MMM yyyy - HH:mm}'}" FontSize="11" TextColor="Gray"/>
+                                    <Label Text="{Binding tavsiye}" FontSize="14" TextColor="Black" MaxLines="2"/>
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="›" FontSize="22" VerticalOptions="Center" TextColor="#BDBDBD"/>
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
