@@ -168,20 +168,21 @@ public partial class MainPage : ContentPage
     async void OnAnalyzeClicked(object sender, EventArgs e)
     {
         var selectedBudget = Math.Round(BudgetSlider.Value);
-        string cachedJson = Preferences.Default.Get("LastFinanceData", string.Empty);
 
         try
         {
+            // 1. UI Hazırlığı (Zaten UI iş parçacığında tetiklendiği için güvenli)
             AnalyzeButton.IsEnabled = false;
             LoadingIndicator.IsVisible = true;
             LoadingIndicator.IsRunning = true;
 
-            await Task.Delay(2000);
+            await Task.Delay(1000);
 
+            // 2. Verileri Topla
             string spendingData = await GetSpendingSummaryAsync();
             if (string.IsNullOrEmpty(spendingData)) spendingData = "Henüz harcama kaydı bulunmuyor.";
 
-            string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcı {UserSession.University} öğrencisi. " +
+            string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcı öğrencisi. " +
                             $"Bugünkü bütçesi: {selectedBudget} TL. " +
                             $"Son harcamaları ve kategorileri: {spendingData}. " +
                             "Bu verilere dayanarak; harcamaların bütçeye oranını analiz et, öğrenciye özel tasarruf " +
@@ -189,42 +190,82 @@ public partial class MainPage : ContentPage
                             "Cevabı SADECE şu JSON formatında ver: " +
                             "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
 
+            // 3. API Çağrısı
             var response = await _geminiService.GetResponseAsync(prompt);
 
+            // KONTROL 1: API Cevap Vermezse
+            if (string.IsNullOrWhiteSpace(response))
+            {
+                // Android güvenliği için UI kodlarını InvokeOnMainThreadAsync içine alıyoruz
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    await DisplayAlert("Bağlantı Hatası", "Yapay zeka cevap vermedi. İnternet iznini veya API Anahtarını kontrol et.", "Tamam");
+                });
+                return;
+            }
+
+            // KONTROL 2: Markdown Temizliği
+            response = response.Replace("```json", "").Replace("```", "").Trim();
             int start = response.IndexOf("{");
             int end = response.LastIndexOf("}");
 
             if (start >= 0 && end >= 0)
             {
-                response = response.Substring(start, (end - start) + 1);
-                var result = JsonConvert.DeserializeObject<FinanceData>(response);
+                string cleanJson = response.Substring(start, (end - start) + 1);
+                var result = JsonConvert.DeserializeObject<FinanceData>(cleanJson);
 
                 if (result != null)
                 {
                     result.KayitTarihi = DateTime.Now;
 
-                    UpdateUI(result);
-
+                    // Veritabanı ve Önbellek Kayıtları
                     await _databaseService.AddAnalysisAsync(result);
                     Preferences.Default.Set("LastFinanceData", JsonConvert.SerializeObject(result));
 
-                    this.ShowPopup(new AnalysisPopup(result));
-                    _ = LoadHistory(); // Task ateşleyip geçiyoruz
+                    // 4. BAŞARILI DURUM: Popup'ı ve UI'ı ana iş parçacığında güvenle aç!
+                    await MainThread.InvokeOnMainThreadAsync(() =>
+                    {
+                        UpdateUI(result);
+                        this.ShowPopup(new AnalysisPopup(result));
+                    });
+
+                    _ = LoadHistory();
                 }
+                else
+                {
+                    await MainThread.InvokeOnMainThreadAsync(async () =>
+                    {
+                        await DisplayAlert("Dönüştürme Hatası", "Gelen veri okunamadı.", "Tamam");
+                    });
+                }
+            }
+            else
+            {
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    await DisplayAlert("Format Hatası", "JSON bulunamadı. Gelen cevap:\n" + response, "Tamam");
+                });
             }
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Hata", "Analiz sırasında bir sorun oluştu: " + ex.Message, "Tamam");
+            // 5. KRİTİK HATA YAKALAMA: Uygulamanın sessizce çökmesini engeller
+            await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                await DisplayAlert("Sistem Hatası", "Kod çöktü: " + ex.Message, "Tamam");
+            });
         }
         finally
         {
-            LoadingIndicator.IsVisible = false;
-            LoadingIndicator.IsRunning = false;
-            AnalyzeButton.IsEnabled = true;
+            // 6. HER DURUMDA UI SIFIRLAMA
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                LoadingIndicator.IsVisible = false;
+                LoadingIndicator.IsRunning = false;
+                AnalyzeButton.IsEnabled = true;
+            });
         }
     }
-
     void UpdateUI(FinanceData data)
     {
         if (data == null) return;
@@ -255,8 +296,49 @@ public partial class MainPage : ContentPage
 
     async void OnSettingsClicked(object sender, EventArgs e)
     {
-        string action = await DisplayActionSheet("Ayarlar", "Vazgeç", null, "Verileri Sıfırla", "Hakkında");
-        if (action == "Verileri Sıfırla") await HandleClearSession();
+        // Ekrana çıkacak menüye "API Anahtarı Gir" seçeneği eklendi
+        string action = await DisplayActionSheet("Ayarlar", "Vazgeç", null, "API Anahtarı Gir", "Verileri Sıfırla", "Hakkında");
+
+        if (action == "Verileri Sıfırla")
+        {
+            await HandleClearSession();
+        }
+        else if (action == "API Anahtarı Gir")
+        {
+            // Yeni seçeneğe tıklandığında API girme metodunu çalıştırır
+            await HandleSetApiKey();
+        }
+        else if (action == "Hakkında")
+        {
+            // Projenin kimliğini yansıtan şık bir hakkında bilgi kutusu
+            await DisplayAlert("Hakkında", "ÖPT - Öğrenci Para Takip\nBursa Uludağ Üniversitesi \nBTK Hackathon 2026 Projesi", "Tamam");
+        }
+    }
+
+    // 2. KULLANICIDAN API ANAHTARINI ALIP GÜVENLİ KASAYA KAYDEDEN METOT
+    private async Task HandleSetApiKey()
+    {
+        // Önce kasada zaten kayıtlı bir anahtar var mı diye bakıyoruz
+        string currentKey = await SecureStorage.Default.GetAsync("UserApiKey");
+
+        // Ekrana yazılı girdi alabileceğimiz bir kutucuk (Prompt) çıkartıyoruz
+        string result = await DisplayPromptAsync(
+            "API Ayarları",
+            "Gemini API anahtarınızı girin:",
+            "Kaydet",
+            "İptal",
+            "AIzaSy...",
+            -1,
+            Keyboard.Text,
+            currentKey);
+
+        // Eğer kullanıcı boş bırakmadıysa ve iptale basmadıysa kaydet
+        if (!string.IsNullOrWhiteSpace(result))
+        {
+            // Girdiği değeri telefonun güvenli kasasına (SecureStorage) kaydediyoruz
+            await SecureStorage.Default.SetAsync("UserApiKey", result.Trim());
+            await DisplayAlert("Başarılı", "API Anahtarınız telefona güvenle kaydedildi!", "Tamam");
+        }
     }
 
     private async Task HandleClearSession()
