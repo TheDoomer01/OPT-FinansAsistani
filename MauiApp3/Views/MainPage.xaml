@@ -48,6 +48,17 @@
                 </Picker>
             </Border>
 
+            <!-- Bugün harcama yoksa çıkacak olan gizli mesaj -->
+            <Label x:Name="EmptyDataLabel" 
+            Text="Bugün henüz hiçbir harcama yapmadınız. Harika gidiyorsunuz! 🎉" 
+            IsVisible="False" 
+            HorizontalOptions="Center" 
+            VerticalOptions="Center" 
+            HorizontalTextAlignment="Center"
+            FontSize="16" 
+            TextColor="Gray" 
+            Margin="0,40,0,40" />
+
             <!-- MAIN CHART -->
             <Frame CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="10">
                 <micro:ChartView x:Name="MyChartView" HeightRequest="220"/>

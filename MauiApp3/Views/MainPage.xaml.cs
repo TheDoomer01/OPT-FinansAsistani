@@ -294,23 +294,45 @@ public partial class MainPage : ContentPage
         });
     }
 
+    // AYARLAR MENÜSÜ (ONAY KUTUCUKLARI EKLENDİ)
     async void OnSettingsClicked(object sender, EventArgs e)
     {
-        // Ekrana çıkacak menüye "API Anahtarı Gir" seçeneği eklendi
-        string action = await DisplayActionSheet("Ayarlar", "Vazgeç", null, "API Anahtarı Gir", "Verileri Sıfırla", "Hakkında");
+        string action = await DisplayActionSheet(
+            "Ayarlar",
+            "Menüyü Kapat", // Alttan açılan menüyü kapatmak için ana vazgeç butonu
+            null,
+            "API Anahtarı Gir",
+            "Verileri Sıfırla",
+            "API Anahtarını Sil",
+            "Hakkında");
 
         if (action == "Verileri Sıfırla")
         {
-            await HandleClearSession();
+            // Kullanıcıya onay soruyoruz. Vazgeç'e basarsa 'isConfirmed' false olur ve if içine girmez.
+            bool isConfirmed = await DisplayAlert("Dikkat", "Tüm harcama verileri ve üniversite adınız silinsin mi?", "Evet, Sıfırla", "Vazgeç");
+
+            if (isConfirmed)
+            {
+                await HandleClearSession();
+            }
+        }
+        else if (action == "API Anahtarını Sil")
+        {
+            // YENİ: API anahtarını silmeden önce sorulan onay (Vazgeç) kutucuğu
+            bool isConfirmed = await DisplayAlert("Uyarı", "API Anahtarınızı tamamen silmek istediğinize emin misiniz?", "Evet, Sil", "Vazgeç");
+
+            if (isConfirmed)
+            {
+                SecureStorage.Default.Remove("UserApiKey");
+                await DisplayAlert("Bilgi", "API Anahtarı başarıyla cihazdan silindi.", "Tamam");
+            }
         }
         else if (action == "API Anahtarı Gir")
         {
-            // Yeni seçeneğe tıklandığında API girme metodunu çalıştırır
             await HandleSetApiKey();
         }
         else if (action == "Hakkında")
         {
-            // Projenin kimliğini yansıtan şık bir hakkında bilgi kutusu
             await DisplayAlert("Hakkında", "ÖPT - Öğrenci Para Takip\nBursa Uludağ Üniversitesi \nBTK Hackathon 2026 Projesi", "Tamam");
         }
     }
@@ -377,6 +399,7 @@ public partial class MainPage : ContentPage
         {
             await Task.Delay(100);
 
+            // Verileri belirliyoruz: Filtre varsa filtre verisi, yoksa tüm veriler
             var allExpenses = filterData ?? await _databaseService.GetExpensesAsync();
 
             if (allExpenses == null || !allExpenses.Any())
@@ -394,6 +417,10 @@ public partial class MainPage : ContentPage
                     };
                     if (TotalExpenseLabel != null) TotalExpenseLabel.Text = "0 ₺";
                 });
+
+                // KRİTİK DÜZELTME: Liste tamamen boşsa da trend grafiğini güncelle,
+                // böylece o da boş ekranını veya tebrik mesajını gösterebilir.
+                await UpdateTrendChart(allExpenses, filterData != null);
                 return;
             }
 
@@ -436,6 +463,10 @@ public partial class MainPage : ContentPage
                 };
             });
 
+            // GÖRÜNTÜ VE FİLTRE BUG'INI ÇÖZEN SATIR BURASI:
+            // Artık grafiğe o anki listeyi ve filtrenin açık/kapalı olma durumunu gönderiyoruz.
+            await UpdateTrendChart(allExpenses, filterData != null);
+
             MiniExpenseList.Children.Clear();
             var recentExpenses = allExpenses.OrderByDescending(x => x.Date).Take(5);
 
@@ -477,6 +508,92 @@ public partial class MainPage : ContentPage
         }
     }
 
+    private async Task UpdateTrendChart(List<Expense> currentExpenses, bool isFilterActive = false)
+    {
+        // 1. KONTROL: Listede hiçbir veri yoksa
+        if (currentExpenses == null || !currentExpenses.Any())
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                MyChartView.IsVisible = false;
+                EmptyDataLabel.Text = isFilterActive ? "Bu filtrelere uygun harcama bulunamadı." : "Henüz hiçbir harcama kaydınız yok.";
+                EmptyDataLabel.IsVisible = true;
+            });
+            return;
+        }
+
+        // 2. KONTROL: Bugün harcama YAPILMADIYSA ve FİLTRE YOKSA
+        // Gün, Ay ve Yıl değerlerini matematiksel olarak kıyaslıyoruz.
+        bool hasTodayExpense = currentExpenses.Any(e =>
+            e.Date.Year == DateTime.Today.Year &&
+            e.Date.Month == DateTime.Today.Month &&
+            e.Date.Day == DateTime.Today.Day);
+
+        if (!isFilterActive && !hasTodayExpense)
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                MyChartView.IsVisible = false;
+                EmptyDataLabel.Text = "Bugün henüz hiçbir harcama yapmadınız. Harika gidiyorsunuz! 🎉";
+                EmptyDataLabel.IsVisible = true;
+            });
+            return;
+        }
+
+        // 3. DURUM: Ekranda gösterilecek veri varsa grafiği görünür yap
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            MyChartView.IsVisible = true;
+            EmptyDataLabel.IsVisible = false;
+        });
+
+        var last7Days = DateTime.Today.AddDays(-6);
+
+        // 🎯 KESİN ÇÖZÜM: Tarihleri Yıl, Ay ve Gün olarak sıfırdan oluşturup birleştiriyoruz.
+        // Bu sayede saat, dakika, saniye veya metin uyuşmazlığı gibi tüm sorunlar tamamen ortadan kalkar.
+        var recentExpenses = currentExpenses
+            .Where(e => e.Date >= last7Days)
+            .GroupBy(e => new DateTime(e.Date.Year, e.Date.Month, e.Date.Day)) // Saf gün gruplaması
+            .Select(g => new {
+                ExactDate = g.Key,
+                Total = g.Sum(e => e.Amount)
+            })
+            .OrderBy(x => x.ExactDate) // Tarihe göre kusursuz sıralama          
+            .ToList();
+
+        // Grafiğe aktarılacak verileri (ChartEntry) hazırlama
+        var entries = new List<ChartEntry>();
+        foreach (var item in recentExpenses)
+        {
+            entries.Add(new ChartEntry((float)item.Total)
+            {
+                // Yazıyı sadece ekranda gösterirken "dd MMM" (Örn: 11 May) formatına çeviriyoruz
+                Label = item.ExactDate.ToString("dd MMM"),
+                ValueLabel = item.Total.ToString("N0") + " ₺",
+                Color = SKColor.Parse("#2196F3")
+            });
+        }
+
+        // GRAFİĞİ ÇİZ
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            MyChartView.Chart = new LineChart
+            {
+                Entries = entries,
+                LabelTextSize = 22,
+                BackgroundColor = SKColors.Transparent,
+                Margin = 20,
+                LineMode = LineMode.Spline,
+                LineSize = 8,
+                PointMode = PointMode.Circle,
+                PointSize = 18,
+                LabelOrientation = Microcharts.Orientation.Horizontal,
+                ValueLabelOrientation = Microcharts.Orientation.Horizontal,
+                AnimationDuration = TimeSpan.Zero,
+                LineAreaAlpha = 0
+            };
+        });
+    }
     private async void OnScanReceiptClicked(object sender, EventArgs e)
     {
         OnAddExpenseClicked(sender, e);
@@ -486,4 +603,6 @@ public partial class MainPage : ContentPage
     {
         OnAddExpenseClicked(sender, e);
     }
+
+
 }
