@@ -17,8 +17,8 @@ public class GeminiService
     {
         _httpClient = new HttpClient();
 
-        // Geliştirici Anahtarı (Yedek) - secrets.json dosyasından çekilir
-        _fallbackApiKey = configuration["Gemini:ApiKey"];
+        // DÜZELTME: secrets.json dosyasındaki isimle tam olarak aynı olmalı
+        _fallbackApiKey = configuration["GeminiApiKey"];
     }
 
     public async Task<string> GetResponseAsync(string soru)
@@ -62,7 +62,7 @@ public class GeminiService
                 // Gelen cevabı dynamic olarak çözüp içindeki metni ayıklıyoruz
                 dynamic data = JsonConvert.DeserializeObject(resultText);
 
-                // Gemini 3 Flash yanıt yapısı
+                // Gemini 2.5 Flash Lite yanıt yapısı
                 string text = data.candidates[0].content.parts[0].text;
                 return text;
             }
@@ -77,14 +77,29 @@ public class GeminiService
         }
     }
 
-        public async Task<string> AnalyzeImageAsync(string prompt, string base64Image)
+    public async Task<string> AnalyzeImageAsync(string prompt, string base64Image)
+    {
+        try
         {
-            try
+            // 1. ADIM: Önce kullanıcının telefondan girdiği güncel anahtara bak
+            string activeApiKey = await SecureStorage.Default.GetAsync("UserApiKey");
+
+            // 2. ADIM: Telefon kasası boşsa, secrets.json'daki yedek anahtarı kullan
+            if (string.IsNullOrWhiteSpace(activeApiKey))
             {
-                var requestBody = new
+                activeApiKey = _fallbackApiKey;
+            }
+
+            // 3. ADIM: İkisi de yoksa güvenli bir şekilde işlemi durdur
+            if (string.IsNullOrWhiteSpace(activeApiKey))
+            {
+                throw new Exception("API Anahtarı bulunamadı! Lütfen Ayarlar menüsünden anahtarınızı girin veya uygulamanın yapılandırma dosyasını kontrol edin.");
+            }
+
+            var requestBody = new
+            {
+                contents = new[]
                 {
-                    contents = new[]
-                    {
                     new
                     {
                         parts = new object[]
@@ -94,26 +109,30 @@ public class GeminiService
                         }
                     }
                 }
-                };
+            };
 
-                var jsonPayload = JsonConvert.SerializeObject(requestBody);
-                var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync($"{BaseUrl}?key={_fallbackApiKey}", content);
+            var jsonPayload = JsonConvert.SerializeObject(requestBody);
+            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
-                if (response.IsSuccessStatusCode)
-                {
-                    var jsonResponse = await response.Content.ReadAsStringAsync();
-                    dynamic result = JsonConvert.DeserializeObject(jsonResponse);
-                    return result.candidates[0].content.parts[0].text;
-                }
+            // DÜZELTME: Artık boş olan _fallbackApiKey yerine, bulduğumuz activeApiKey'i kullanıyoruz!
+            var response = await _httpClient.PostAsync($"{BaseUrl}?key={activeApiKey}", content);
 
-                return "Hata: API yanıt vermedi.";
-            }
-            catch (Exception ex)
+            if (response.IsSuccessStatusCode)
             {
-                return "Görsel analiz hatası: " + ex.Message;
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                dynamic result = JsonConvert.DeserializeObject(jsonResponse);
+                return result.candidates[0].content.parts[0].text;
             }
-        } // <--- 2. DURAK: AnalyzeImageAsync METODU BURADA BİTİYOR
+            else
+            {
+                var errorResponse = await response.Content.ReadAsStringAsync();
+                throw new Exception($"API_REDDETTI: {response.StatusCode} \nMesaj: {errorResponse}");
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Görsel analiz hatası: " + ex.Message);
+        }
     }
-
+}
 

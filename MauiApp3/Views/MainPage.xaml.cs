@@ -186,7 +186,7 @@ public partial class MainPage : ContentPage
                             $"Bugünkü bütçesi: {selectedBudget} TL. " +
                             $"Son harcamaları ve kategorileri: {spendingData}. " +
                             "Bu verilere dayanarak; harcamaların bütçeye oranını analiz et, öğrenciye özel tasarruf " +
-                            "tavsiyeleri ve komik/ilginç finansal haber başlıkları üret. " +
+                            "tavsiyeleri ve finansal haber başlıkları bul. " +
                             "Cevabı SADECE şu JSON formatında ver: " +
                             "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
 

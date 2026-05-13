@@ -143,27 +143,50 @@ public partial class AddExpensePopup : Popup
             string base64Image = Convert.ToBase64String(memoryStream.ToArray());
 
             // 2. Gemini'ye talimat gönder (Prompt Engineering)
-            string prompt = "Bu bir alışveriş fişi. Eğer fiş üzerinde BİM, A101, ŞOK, Migros, Carrefour gibi mağaza isimleri görüyorsan kategoriyi direkt 'Market' olarak belirle. Diğer durumlarda içeriğe göre Yemek, Ulaşım veya Eğlence olarak sınıflandır. " +
+            string prompt = "Bu bir alışveriş fişi. Eğer market fişine benzeyen bir kağıt görürsen kategoriyi 'Market' olarak belirle. Diğer durumlarda içeriğe göre Yemek, Ulaşım veya Eğlence olarak sınıflandır. " +
                             "Cevabı sadece şu JSON formatında ver, başka metin ekleme: " +
                             "{ \"Amount\": 0.0, \"Category\": \"...\", \"Date\": \"yyyy-MM-dd\" }";
 
             // 3. Gemini Servisini çağır
             var resultJson = await _geminiService.AnalyzeImageAsync(prompt, base64Image);
 
-            // 4. Gelen JSON'u temizle ve kutulara doldur
-            var cleanJson = resultJson.Replace("```json", "").Replace("```", "").Trim();
+            // 4. Gelen Yanıtın İçinden Sadece JSON Kısmını Çıkar
+            // DİKKAT: Değişkeni burada, en dışta tanımlıyoruz ki alt satırlar onu görebilsin
+            string cleanJson = string.Empty;
+
+            int startIndex = resultJson.IndexOf('{');
+            int endIndex = resultJson.LastIndexOf('}');
+
+            // Eğer metnin içinde { ve } işaretleri düzgün bir şekilde varsa:
+            if (startIndex >= 0 && endIndex > startIndex)
+            {
+                // Sadece ilk { ve son } işaretleri ile bunların arasındakileri al
+                cleanJson = resultJson.Substring(startIndex, (endIndex - startIndex) + 1);
+            }
+            else
+            {
+                // Yapay zeka tamamen yanlış bir format döndüyse hata fırlat
+                throw new Exception("Yapay zeka beklenen formata uygun cevap vermedi. \nCevap: " + resultJson);
+            }
+
+            // cleanJson artık yukarıda tanımlandığı için hata vermeyecek
             var expenseData = JsonConvert.DeserializeObject<Expense>(cleanJson);
 
+            // Gelen veri boş değilse arayüzü güncelle
             if (expenseData != null)
             {
-                AmountEntry.Text = expenseData.Amount.ToString();
-                DescEntry.Text = expenseData.Category;
+                // UI (Arayüz) güncellemelerini Ana İş Parçacığına (Main Thread) alıyoruz
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    AmountEntry.Text = expenseData.Amount.ToString();
+                    DescEntry.Text = expenseData.Category;
 
-                // Picker'da bu kategori varsa onu da seç
-                if (CategoryPicker.Items.Contains(expenseData.Category))
-                    CategoryPicker.SelectedItem = expenseData.Category;
+                    // Picker'da bu kategori varsa onu da seç
+                    if (CategoryPicker.Items.Contains(expenseData.Category))
+                        CategoryPicker.SelectedItem = expenseData.Category;
 
-                await App.Current.MainPage.DisplayAlert("Başarılı", "Fiş bilgileri ayıklandı!", "Tamam");
+                    await App.Current.MainPage.DisplayAlert("Başarılı", "Fiş bilgileri başarıyla ayıklandı ve forma eklendi!", "Tamam");
+                });
             }
         }
         catch (Exception ex)
