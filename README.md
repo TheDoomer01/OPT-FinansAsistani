@@ -14,10 +14,8 @@ Bu proje öğrencilerin finansal durumlarını daha iyi anlamalarına ve harcama
 
 ## Ekran Görüntüleri	
 | Ana Ekran | Ana Ekran 2| Ayarlar | Harcama Ekle |
-<img src="images/mainpage.jpg" width=200> 
-<img src="images/mainpage2.jpg" width=200> 
-<img src="images/settings.jpg" width=200> 
-<img src="images/addexpense.jpg" width=200>
+| :---: | :---: | :---: | :---: |
+| ![Ana Sayfa](images/mainpage.jpg) width="200" alt="Ana Sayfa"> | ![Ana Ekran 2](images/mainpage2.jpg)  width="200" alt="Ana Sayfa 2">| ![Ayarlar](images/settings.jpg) width="200" alt="Ayarlar"> | ![Harcama Ekle](images/addexpense.jpg) width="200" alt="Harcama Ekle">|
 ----
 
 ## Kurulum (Setup)
