@@ -8,5 +8,7 @@
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/mainpage2.jpg" />
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/settings.jpg" />
   </Folder>
-  <Project Path="MauiApp3/MauiApp3.csproj" />
+  <Project Path="MauiApp3/MauiApp3.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
 </Solution>

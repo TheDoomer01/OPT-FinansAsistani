@@ -297,69 +297,99 @@ public partial class MainPage : ContentPage
     // AYARLAR MENÜSÜ (ONAY KUTUCUKLARI EKLENDİ)
     async void OnSettingsClicked(object sender, EventArgs e)
     {
-        string action = await DisplayActionSheet(
-            "Ayarlar",
-            "Menüyü Kapat", // Alttan açılan menüyü kapatmak için ana vazgeç butonu
-            null,
-            "API Anahtarı Gir",
-            "Verileri Sıfırla",
-            "API Anahtarını Sil",
-            "Hakkında");
-
-        if (action == "Verileri Sıfırla")
+        // YENİ: Tüm menü işlemlerini güvenlik çemberine (try) alıyoruz
+        try
         {
-            // Kullanıcıya onay soruyoruz. Vazgeç'e basarsa 'isConfirmed' false olur ve if içine girmez.
-            bool isConfirmed = await DisplayAlert("Dikkat", "Tüm harcama verileri ve üniversite adınız silinsin mi?", "Evet, Sıfırla", "Vazgeç");
+            string action = await DisplayActionSheet(
+                "Ayarlar",
+                "Menüyü Kapat", // Alttan açılan menüyü kapatmak için ana vazgeç butonu
+                null,
+                "API Anahtarı Gir",
+                "Verileri Sıfırla",
+                "API Anahtarını Sil",
+                "Hakkında");
 
-            if (isConfirmed)
+            if (action == "Verileri Sıfırla")
             {
-                await HandleClearSession();
+                // Kullanıcıya onay soruyoruz. Vazgeç'e basarsa 'isConfirmed' false olur ve if içine girmez.
+                bool isConfirmed = await DisplayAlert("Dikkat", "Tüm harcama verileri ve üniversite adınız silinsin mi?", "Evet, Sıfırla", "Vazgeç");
+
+                if (isConfirmed)
+                {
+                    await HandleClearSession();
+                }
+            }
+            else if (action == "API Anahtarını Sil")
+            {
+                // YENİ: API anahtarını silmeden önce sorulan onay (Vazgeç) kutucuğu
+                bool isConfirmed = await DisplayAlert("Uyarı", "API Anahtarınızı tamamen silmek istediğinize emin misiniz?", "Evet, Sil", "Vazgeç");
+
+                if (isConfirmed)
+                {
+                    SecureStorage.Default.Remove("UserApiKey");
+                    await DisplayAlert("Bilgi", "API Anahtarı başarıyla cihazdan silindi.", "Tamam");
+                }
+            }
+            else if (action == "API Anahtarı Gir")
+            {
+                await HandleSetApiKey();
+            }
+            else if (action == "Hakkında")
+            {
+                await DisplayAlert("Hakkında", "ÖPT - Öğrenci Para Takip\nBursa Uludağ Üniversitesi \nBTK Hackathon 2026 Projesi", "Tamam");
             }
         }
-        else if (action == "API Anahtarını Sil")
+        catch (Exception ex)
         {
-            // YENİ: API anahtarını silmeden önce sorulan onay (Vazgeç) kutucuğu
-            bool isConfirmed = await DisplayAlert("Uyarı", "API Anahtarınızı tamamen silmek istediğinize emin misiniz?", "Evet, Sil", "Vazgeç");
-
-            if (isConfirmed)
-            {
-                SecureStorage.Default.Remove("UserApiKey");
-                await DisplayAlert("Bilgi", "API Anahtarı başarıyla cihazdan silindi.", "Tamam");
-            }
-        }
-        else if (action == "API Anahtarı Gir")
-        {
-            await HandleSetApiKey();
-        }
-        else if (action == "Hakkında")
-        {
-            await DisplayAlert("Hakkında", "ÖPT - Öğrenci Para Takip\nBursa Uludağ Üniversitesi \nBTK Hackathon 2026 Projesi", "Tamam");
+            // Eğer bir hata olursa uygulama çökmez, bu uyarıyı verir
+            await DisplayAlert("Sistem Uyarısı", $"Menü işlemi sırasında bir hata oluştu: {ex.Message}", "Tamam");
         }
     }
 
     // 2. KULLANICIDAN API ANAHTARINI ALIP GÜVENLİ KASAYA KAYDEDEN METOT
     private async Task HandleSetApiKey()
     {
-        // Önce kasada zaten kayıtlı bir anahtar var mı diye bakıyoruz
-        string currentKey = await SecureStorage.Default.GetAsync("UserApiKey");
-
-        // Ekrana yazılı girdi alabileceğimiz bir kutucuk (Prompt) çıkartıyoruz
-        string result = await DisplayPromptAsync(
-            "API Ayarları",
-            "Gemini API anahtarınızı girin:",
-            "Kaydet",
-            "İptal",
-            "AIzaSy...",
-            -1,
-            Keyboard.Text,
-            currentKey);
-
-        // Eğer kullanıcı boş bırakmadıysa ve iptale basmadıysa kaydet
-        if (!string.IsNullOrWhiteSpace(result))
+        // YENİ: Güvenli kasa işlemlerini hata yakalayıcı içine alıyoruz
+        try
         {
-            // Girdiği değeri telefonun güvenli kasasına (SecureStorage) kaydediyoruz
-            await SecureStorage.Default.SetAsync("UserApiKey", result.Trim());
-            await DisplayAlert("Başarılı", "API Anahtarınız telefona güvenle kaydedildi!", "Tamam");
+            // Önce kasada zaten kayıtlı bir anahtar var mı diye bakıyoruz
+            string currentKey = await SecureStorage.Default.GetAsync("UserApiKey");
+
+            // Ekrana yazılı girdi alabileceğimiz bir kutucuk (Prompt) çıkartıyoruz
+            string result = await DisplayPromptAsync(
+                "API Ayarları",
+                "Gemini API anahtarınızı girin:",
+                "Kaydet",
+                "İptal",
+                "AIzaSy...",
+                -1,
+                Keyboard.Text,
+                currentKey);
+
+            // 1. DURUM: Kullanıcı "İptal" butonuna bastıysa (result null döner)
+            if (result == null) return;
+
+            // 2. DURUM: Kullanıcı "Kaydet" dedi ama içi boş veya sadece boşluk var
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                // Kullanıcıyı uyarıyoruz
+                await DisplayAlert("Uyarı", "API anahtarı boş bırakılamaz. Lütfen geçerli bir anahtar girin.", "Tamam");
+
+                // Kullanıcıya kolaylık olsun diye giriş ekranını tekrar açıyoruz (Rekürsif çağrı)
+                await HandleSetApiKey();
+                return;
+            }
+
+            {
+                // Girdiği değeri telefonun güvenli kasasına (SecureStorage) kaydediyoruz
+                await SecureStorage.Default.SetAsync("UserApiKey", result.Trim());
+                await DisplayAlert("Başarılı", "API Anahtarınız telefona güvenle kaydedildi!", "Tamam");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Donanımsal kasa şifreleme hatası olursa çökmeyi engeller
+            await DisplayAlert("Güvenlik Uyarısı", $"Cihazın güvenli kasasına erişilemedi: {ex.Message}", "Tamam");
         }
     }
 
