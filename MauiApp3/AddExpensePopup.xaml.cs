@@ -24,16 +24,36 @@ public partial class AddExpensePopup : Popup
     {
         try
         {
-            // Kontroller...
-            if (string.IsNullOrWhiteSpace(DescEntry.Text) || string.IsNullOrWhiteSpace(AmountEntry.Text)) return;
-            if (!double.TryParse(AmountEntry.Text, out double girilenTutar)) return;
+            // 1. ZORUNLU ALAN KONTROLÜ: Tutar geçerli bir sayı mı?
+            if (string.IsNullOrWhiteSpace(AmountEntry.Text) || !double.TryParse(AmountEntry.Text, out double girilenTutar))
+            {
+                // Eğer tutar girilmediyse işlemi durdur.
+                return;
+            }
 
-            // Veriyi oluştur ve kaydet
+            // 2. ZORUNLU ALAN KONTROLÜ: Kategori seçilmiş mi?
+            if (CategoryPicker.SelectedItem == null)
+            {
+                // Eğer listeden bir kategori seçilmediyse işlemi durdur.
+                return;
+            }
+
+            // 3. İSTEĞE BAĞLI ALAN (ORTA YOL): Açıklama boşsa varsayılan metin ata
+            string girilenAciklama = string.IsNullOrWhiteSpace(DescEntry.Text)
+                ? "Belirtilmedi" // Kullanıcı boş bırakırsa bu metin geçerli olur (istersen "" olarak da değiştirebilirsin)
+                : DescEntry.Text.Trim(); // Doluysa başındaki/sonundaki gereksiz boşlukları temizle
+
+            // 4. Veriyi oluştur ve kaydet
             var newExpense = new Expense
             {
                 Amount = girilenTutar,
-                Category = CategoryPicker.SelectedItem?.ToString() ?? DescEntry.Text,
-                Date = DateTime.Now
+                // Kategori kesin seçildiği için doğrudan .ToString() ile alabiliriz
+                Category = CategoryPicker.SelectedItem.ToString(),
+                Date = DateTime.Now,
+
+                // NOT: Eğer Expense modelinde (sınıfında) açıklama için bir özellik 
+                // (örneğin Description) tanımladıysan, o değeri de burada atayabilirsin:
+                Description = girilenAciklama
             };
 
             await _dbService.AddExpenseAsync(newExpense);

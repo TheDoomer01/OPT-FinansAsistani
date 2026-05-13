@@ -399,7 +399,6 @@ public partial class MainPage : ContentPage
         {
             await Task.Delay(100);
 
-            // Verileri belirliyoruz: Filtre varsa filtre verisi, yoksa tüm veriler
             var allExpenses = filterData ?? await _databaseService.GetExpensesAsync();
 
             if (allExpenses == null || !allExpenses.Any())
@@ -418,8 +417,6 @@ public partial class MainPage : ContentPage
                     if (TotalExpenseLabel != null) TotalExpenseLabel.Text = "0 ₺";
                 });
 
-                // KRİTİK DÜZELTME: Liste tamamen boşsa da trend grafiğini güncelle,
-                // böylece o da boş ekranını veya tebrik mesajını gösterebilir.
                 await UpdateTrendChart(allExpenses, filterData != null);
                 return;
             }
@@ -463,8 +460,6 @@ public partial class MainPage : ContentPage
                 };
             });
 
-            // GÖRÜNTÜ VE FİLTRE BUG'INI ÇÖZEN SATIR BURASI:
-            // Artık grafiğe o anki listeyi ve filtrenin açık/kapalı olma durumunu gönderiyoruz.
             await UpdateTrendChart(allExpenses, filterData != null);
 
             MiniExpenseList.Children.Clear();
@@ -472,26 +467,122 @@ public partial class MainPage : ContentPage
 
             foreach (var exp in recentExpenses)
             {
-                var frame = new Border
+                // 1. IZGARA OLUŞTURMA: Alanı sadece sağ ve sol olarak ikiye ayırıyoruz
+                var grid = new Grid
                 {
-                    StrokeShape = new RoundRectangle { CornerRadius = 5 },
-                    Padding = 5,
-                    Content = new VerticalStackLayout
+                    ColumnDefinitions =
                     {
-                        Children = {
-                            new Label { Text = exp.Category, FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = Colors.Black },
-                            new Label { Text = exp.Amount.ToString("C"), FontSize = 10, TextColor = Colors.DarkGreen }
-                        }
+                        new ColumnDefinition { Width = GridLength.Star }, // Sol Taraf: Yazılar için alabildiği kadar geniş alan (*)
+                        new ColumnDefinition { Width = GridLength.Auto }  // Sağ Taraf: Buton için sadece gerektiği kadar dar alan (Auto)
+                    },
+                    ColumnSpacing = 15, // Yazı ile buton arasındaki mesafeyi artırdık
+                    Padding = new Thickness(12), // KUTUNUN İÇ BOŞLUĞU: Her yönden 12 birim boşluk vererek ferahlattık
+                    VerticalOptions = LayoutOptions.Center
+                };
+
+                // 2. SOL TARAF: Senin eski orijinal tasarımın (Kategori üstte, Tutar altta)
+                var textLayout = new VerticalStackLayout
+                {
+                    VerticalOptions = LayoutOptions.Center,
+                    Spacing = 4, // Kategori adı ile tutar yazısı arasına minik bir nefes payı ekledik
+                    Children = {
+                        new Label { Text = exp.Category, FontSize = 14, FontAttributes = FontAttributes.Bold, TextColor = Colors.Black },
+                        new Label { Text = exp.Amount.ToString("N0") + " ₺", FontSize = 12, TextColor = Colors.DarkGreen }
                     }
                 };
+
+                // 3. SAĞ TARAF: Sil Butonumuz
+                var deleteBtn = new Button
+                {
+                    Text = "Sil",
+                    BackgroundColor = Colors.Red,
+                    TextColor = Colors.White,
+                    FontSize = 10,
+                    Padding = new Thickness(10, 0), // Butonun içine sağdan soldan minik bir pay verdik
+                    HeightRequest = 35,
+                    CornerRadius = 8,
+                    VerticalOptions = LayoutOptions.Center,
+                    CommandParameter = exp
+                };
+                deleteBtn.Clicked += OnDeleteExpenseClicked;
+
+                // 4. İÇERİKLERİ YERLEŞTİRME
+                grid.Add(textLayout, 0, 0); // Yazı bloğu 0. sütuna (Sola)
+                grid.Add(deleteBtn, 1, 0);  // Buton 1. sütuna (Sağa)
+
+                // 5. DIŞ ÇERÇEVE
+                var frame = new Border
+                {
+                    StrokeShape = new RoundRectangle { CornerRadius = 8 },
+                    Margin = new Thickness(0, 0, 0, 10), // KUTULAR ARASI BOŞLUK: Alt alta binen kutuların arasına 10 piksel mesafe koyduk
+                    Content = grid
+                };
+
                 MiniExpenseList.Children.Add(frame);
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Grafik Hatası: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Grafik Hatası: {ex.Message}");
         }
     }
+
+    // Görünen "Sil" butonuna tıklandığında çalışır
+    private async void OnDeleteExpenseClicked(object sender, EventArgs e)
+    {
+        // 1. Tıklanan nesneyi bir "Button" olarak algıla
+        var button = sender as Button;
+
+        // 2. Butona bağladığımız CommandParameter içindeki Harcama (Expense) verisini kontrol et
+        if (button?.CommandParameter is Expense expenseToDelete)
+        {
+            // 3. Kullanıcıya yanlışlıkla silmemesi için onay sor
+            bool isConfirmed = await DisplayAlert(
+                "Harcama Silinecek",
+                $"{expenseToDelete.Category} kategorisindeki {expenseToDelete.Amount:N0} ₺ tutarındaki harcamayı silmek istediğinize emin misiniz?",
+                "Evet, Sil",
+                "Vazgeç");
+
+            // 4. Onay verildiyse veritabanından sil
+            if (isConfirmed)
+            {
+                await _databaseService.DeleteExpenseAsync(expenseToDelete);
+
+                // Ekranı anında güncelle
+                await UpdateChart();
+
+                await DisplayAlert("Başarılı", "Harcama başarıyla silindi.", "Tamam");
+            }
+        }
+    }
+
+    // Listenin durumunu (Açık/Kapalı) aklında tutacak olan bool değişkeni
+    private bool _isHistoryExpanded = false;
+
+    // Tıklama gerçekleştiğinde çalışacak olan metot
+    private void OnHistoryExpandTapped(object sender, TappedEventArgs e)
+    {
+        // Durumu tersine çevir (Açıksa kapat, kapalıysa aç)
+        _isHistoryExpanded = !_isHistoryExpanded;
+
+        if (_isHistoryExpanded)
+        {
+            // LİSTEYİ GENİŞLET: Yüksekliği 450 piksele çıkarıyoruz
+            HistoryScrollView.HeightRequest = 450;
+
+            // Kullanıcıya artık listeyi daraltabileceğini bildiriyoruz
+            HistoryExpandLabel.Text = "Daralt ▲";
+        }
+        else
+        {
+            // LİSTEYİ DARALT: İlk baştaki derli toplu boyutu olan 220 piksele geri döndürüyoruz
+            HistoryScrollView.HeightRequest = 220;
+
+            // Kullanıcıya tekrar genişletebileceğini bildiriyoruz
+            HistoryExpandLabel.Text = "Daha Fazla Göster ▼";
+        }
+    }
+
 
     private async void OnChartTapped(object sender, TappedEventArgs e)
     {
@@ -523,7 +614,6 @@ public partial class MainPage : ContentPage
         }
 
         // 2. KONTROL: Bugün harcama YAPILMADIYSA ve FİLTRE YOKSA
-        // Gün, Ay ve Yıl değerlerini matematiksel olarak kıyaslıyoruz.
         bool hasTodayExpense = currentExpenses.Any(e =>
             e.Date.Year == DateTime.Today.Year &&
             e.Date.Month == DateTime.Today.Month &&
@@ -540,58 +630,87 @@ public partial class MainPage : ContentPage
             return;
         }
 
-        // 3. DURUM: Ekranda gösterilecek veri varsa grafiği görünür yap
-        MainThread.BeginInvokeOnMainThread(() =>
+        // 3. VERİ FİLTRELEME VE HAZIRLIK (Arka Planda)
+        var recentExpensesQuery = currentExpenses.AsEnumerable();
+
+        if (!isFilterActive)
         {
-            MyChartView.IsVisible = true;
-            EmptyDataLabel.IsVisible = false;
-        });
+            var last7Days = DateTime.Today.AddDays(-6);
+            recentExpensesQuery = recentExpensesQuery.Where(e => e.Date >= last7Days);
+        }
 
-        var last7Days = DateTime.Today.AddDays(-6);
-
-        // 🎯 KESİN ÇÖZÜM: Tarihleri Yıl, Ay ve Gün olarak sıfırdan oluşturup birleştiriyoruz.
-        // Bu sayede saat, dakika, saniye veya metin uyuşmazlığı gibi tüm sorunlar tamamen ortadan kalkar.
-        var recentExpenses = currentExpenses
-            .Where(e => e.Date >= last7Days)
-            .GroupBy(e => new DateTime(e.Date.Year, e.Date.Month, e.Date.Day)) // Saf gün gruplaması
+        var recentExpenses = recentExpensesQuery
+            .GroupBy(e => new DateTime(e.Date.Year, e.Date.Month, e.Date.Day))
             .Select(g => new {
                 ExactDate = g.Key,
                 Total = g.Sum(e => e.Amount)
             })
-            .OrderBy(x => x.ExactDate) // Tarihe göre kusursuz sıralama          
+            .OrderBy(x => x.ExactDate)
             .ToList();
 
-        // Grafiğe aktarılacak verileri (ChartEntry) hazırlama
+        if (!recentExpenses.Any())
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                MyChartView.IsVisible = false;
+                EmptyDataLabel.Text = "Seçilen tarih aralığında grafik verisi bulunamadı.";
+                EmptyDataLabel.IsVisible = true;
+            });
+            return;
+        }
+
+        // Tek nokta çizim bug'ı çözümü
+        if (recentExpenses.Count == 1)
+        {
+            var singleDate = recentExpenses[0].ExactDate;
+            recentExpenses.Insert(0, new { ExactDate = singleDate.AddDays(-1), Total = 0.0 });
+        }
+
         var entries = new List<ChartEntry>();
         foreach (var item in recentExpenses)
         {
             entries.Add(new ChartEntry((float)item.Total)
             {
-                // Yazıyı sadece ekranda gösterirken "dd MMM" (Örn: 11 May) formatına çeviriyoruz
                 Label = item.ExactDate.ToString("dd MMM"),
                 ValueLabel = item.Total.ToString("N0") + " ₺",
                 Color = SKColor.Parse("#2196F3")
             });
         }
 
-        // GRAFİĞİ ÇİZ
+        // 4. GRAFİK NESNESİNİ OLUŞTURMA (Hala Arka Planda)
+        var newChart = new LineChart
+        {
+            Entries = entries,
+            LabelTextSize = 22,
+            BackgroundColor = SKColors.Transparent,
+            Margin = 20,
+            LineMode = LineMode.Spline,
+            LineSize = 8,
+            PointMode = PointMode.Circle,
+            PointSize = 18,
+            LabelOrientation = Microcharts.Orientation.Horizontal,
+            ValueLabelOrientation = Microcharts.Orientation.Horizontal,
+            AnimationDuration = TimeSpan.Zero,
+            LineAreaAlpha = 0
+        };
+
+        // 5. 🎯 GÖRÜNTÜ BUG'I İÇİN KESİN ÇÖZÜM
+        // Önce arayüze eski çizimi tamamen silmesini söylüyoruz
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            MyChartView.Chart = new LineChart
-            {
-                Entries = entries,
-                LabelTextSize = 22,
-                BackgroundColor = SKColors.Transparent,
-                Margin = 20,
-                LineMode = LineMode.Spline,
-                LineSize = 8,
-                PointMode = PointMode.Circle,
-                PointSize = 18,
-                LabelOrientation = Microcharts.Orientation.Horizontal,
-                ValueLabelOrientation = Microcharts.Orientation.Horizontal,
-                AnimationDuration = TimeSpan.Zero,
-                LineAreaAlpha = 0
-            };
+            MyChartView.Chart = null;
+            MyChartView.IsVisible = true;
+            EmptyDataLabel.IsVisible = false;
+        });
+
+        // Çizim motorunun (SkiaSharp) ekranı temizlemesi için sadece 50 milisaniyelik bir nefes tanıyoruz.
+        // Bu sayede rakamlar birbiri üstüne binmek yerine tertemiz bir alana yazılır.
+        await Task.Delay(50);
+
+        // Temizliğin bittiğinden emin olduktan sonra yeni grafiği ekrana basıyoruz
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            MyChartView.Chart = newChart;
         });
     }
     private async void OnScanReceiptClicked(object sender, EventArgs e)

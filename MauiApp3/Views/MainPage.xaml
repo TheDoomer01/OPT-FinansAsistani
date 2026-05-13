@@ -85,23 +85,34 @@
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- EXPENSE CHART -->
+            <!-- EXPENSE CHART (GÜNCELLENMİŞ YATAY TASARIM) -->
             <Frame CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="12">
                 <VerticalStackLayout Spacing="10">
-                    <Grid ColumnDefinitions="*,120">
-                        <!-- DONUT -->
-                        <Grid>
-                            <micro:ChartView x:Name="ExpenseChartView" HeightRequest="220"/>
+
+                    <!-- 
+                        İZGARA (Grid) GÜNCELLEMESİ:
+                        Eski sabit 120 piksel yerine, ekranı orantılı bölüyoruz.
+                        "4*,6*" demek = Genişliğin 4 parçasını 1. sütuna, 6 parçasını 2. sütuna ver demektir.
+                        Böylece hem grafik derli toplu durur hem de listendeki geniş kutulara rahatça yer kalır.
+                    -->
+                    <Grid ColumnDefinitions="4*, 6*">
+
+                        <!-- SOL SÜTUN (Sütun 0): DONUT GRAFİĞİ -->
+                        <!-- Grafiğin kendi kendine yayılmasını engellemek için Grid.Column="0" olarak açıkça belirttik -->
+                        <Grid Grid.Column="0" VerticalOptions="Center">
+                            <micro:ChartView x:Name="ExpenseChartView" HeightRequest="200"/>
                             <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" InputTransparent="True">
                                 <Label Text="Toplam" FontSize="11" HorizontalOptions="Center" TextColor="Gray"/>
-                                <Label x:Name="TotalExpenseLabel" Text="0 ₺" FontSize="24" FontAttributes="Bold" HorizontalOptions="Center" TextColor="Black"/>
+                                <Label x:Name="TotalExpenseLabel" Text="0 ₺" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" TextColor="Black"/>
                             </VerticalStackLayout>
                         </Grid>
 
-                        <!-- MINI LIST -->
-                        <ScrollView Grid.Column="1">
+                        <!-- SAĞ SÜTUN (Sütun 1): MİNİ HARCAMA LİSTESİ -->
+                        <!-- Grafikle arasına biraz nefes payı (Margin) koyduk -->
+                        <ScrollView Grid.Column="1" Margin="10,0,0,0" VerticalScrollBarVisibility="Never">
                             <VerticalStackLayout x:Name="MiniExpenseList" Spacing="8" Padding="5"/>
                         </ScrollView>
+
                     </Grid>
                 </VerticalStackLayout>
             </Frame>
@@ -132,27 +143,53 @@
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- HISTORY -->
-            <Label Text="📜 Geçmiş Analizler" FontSize="18" FontAttributes="Bold" TextColor="#2C3E50"/>
+            <Label Text="📜 Geçmiş Analizler" FontSize="18" FontAttributes="Bold" TextColor="#2C3E50" Margin="0,10,0,5"/>
 
-            <VerticalStackLayout x:Name="HistoryList" BindableLayout.ItemsSource="{Binding HistoryItems}" Spacing="8">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate>
-                        <Frame CornerRadius="12" Padding="12" Margin="0,2" BackgroundColor="White" BorderColor="#EAEAEA" HasShadow="False">
-                            <Frame.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectHistoryCommand}" CommandParameter="{Binding .}" />
-                            </Frame.GestureRecognizers>
-                            <Grid ColumnDefinitions="*,Auto">
-                                <VerticalStackLayout>
-                                    <Label Text="{Binding KayitTarihi, StringFormat='{0:dd MMM yyyy - HH:mm}'}" FontSize="11" TextColor="Gray"/>
-                                    <Label Text="{Binding tavsiye}" FontSize="14" TextColor="Black" MaxLines="2"/>
-                                </VerticalStackLayout>
-                                <Label Grid.Column="1" Text="›" FontSize="22" VerticalOptions="Center" TextColor="#BDBDBD"/>
-                            </Grid>
-                        </Frame>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
+            <!-- Açılır/Kapanır Yapı İçin Kapsayıcı Grid -->
+            <Grid RowDefinitions="Auto, Auto">
+
+                <!-- 1. KISIM: Kaydırılabilir Liste (Başlangıçta 220 piksel ile sınırlandırdık) -->
+                <!-- x:Name="HistoryScrollView" ekledik ki C# üzerinden boyunu uzatıp kısaltabilelim -->
+                <ScrollView x:Name="HistoryScrollView" Grid.Row="0" HeightRequest="220" VerticalScrollBarVisibility="Never">
+
+                    <!-- Senin Orijinal Listen (Hiçbir bağlamasını bozmadık) -->
+                    <VerticalStackLayout x:Name="HistoryList" BindableLayout.ItemsSource="{Binding HistoryItems}" Spacing="8">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Frame CornerRadius="12" Padding="12" Margin="0,2" BackgroundColor="White" BorderColor="#EAEAEA" HasShadow="False">
+                                    <Frame.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectHistoryCommand}" CommandParameter="{Binding .}" />
+                                    </Frame.GestureRecognizers>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <VerticalStackLayout>
+                                            <Label Text="{Binding KayitTarihi, StringFormat='{0:dd MMM yyyy - HH:mm}'}" FontSize="11" TextColor="Gray"/>
+                                            <Label Text="{Binding tavsiye}" FontSize="14" TextColor="Black" MaxLines="2"/>
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="1" Text="›" FontSize="22" VerticalOptions="Center" TextColor="#BDBDBD"/>
+                                    </Grid>
+                                </Frame>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                </ScrollView>
+
+                <!-- 2. KISIM: Genişlet/Daralt Etiketi (Tıklanabilir Buton Gibi Davranan Yazı) -->
+                <Label x:Name="HistoryExpandLabel" 
+                       Grid.Row="1" 
+                       Text="Daha Fazla Göster ▼" 
+                       FontSize="12" 
+                       TextColor="#3498DB" 
+                       HorizontalOptions="Center" 
+                       Margin="0,8,0,10" 
+                       FontAttributes="Bold">
+                    <Label.GestureRecognizers>
+                        <!-- Tıklandığında C# tarafındaki metodu tetikler -->
+                        <TapGestureRecognizer Tapped="OnHistoryExpandTapped" />
+                    </Label.GestureRecognizers>
+                </Label>
+
+            </Grid>
 
         </VerticalStackLayout>
     </ScrollView>
