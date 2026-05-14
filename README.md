@@ -11,6 +11,7 @@ Bu proje öğrencilerin finansal durumlarını daha iyi anlamalarına ve harcama
 * Gemini API ile harcamaların analiz edilmesi 
 * Bütçeye göre tasarruf önerileri sunulması 
 * Gemini API'si ekleme özelliği 
+* Windows ve Android platformlarında çalışabilme
 
 ## Ekran Görüntüleri	
 | Ana Ekran | Ana Ekran 2| Ayarlar | Harcama Ekle |
