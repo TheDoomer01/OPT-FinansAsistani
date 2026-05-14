@@ -3,9 +3,9 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/Solution Items/images/">
+    <File Path="../../Users/Ahmet Behlül/Downloads/Phone Link/mainpage2(new).jpg" />
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/addexpense.jpg" />
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/mainpage.jpg" />
-    <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/mainpage2.jpg" />
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/settings.jpg" />
   </Folder>
   <Project Path="MauiApp3/MauiApp3.csproj">
