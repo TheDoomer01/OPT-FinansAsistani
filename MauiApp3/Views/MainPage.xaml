@@ -85,38 +85,46 @@
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- EXPENSE CHART (GÜNCELLENMİŞ YATAY TASARIM) -->
-            <Frame CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="12">
+            <!-- EXPENSE CHART (DÜZELTİLMİŞ VE FERAH TASARIM) -->
+            <Frame CornerRadius="16" BackgroundColor="White" BorderColor="#ECECEC" HasShadow="False" Padding="15">
+                <!-- Ana Taşıyıcı: Her şeyi alt alta dizer -->
                 <VerticalStackLayout Spacing="10">
 
-                    <!-- 
-                        İZGARA (Grid) GÜNCELLEMESİ:
-                        Eski sabit 120 piksel yerine, ekranı orantılı bölüyoruz.
-                        "4*,6*" demek = Genişliğin 4 parçasını 1. sütuna, 6 parçasını 2. sütuna ver demektir.
-                        Böylece hem grafik derli toplu durur hem de listendeki geniş kutulara rahatça yer kalır.
-                    -->
+                    <!-- ÜST KISIM: Grafik ve Liste Yan Yana -->
                     <Grid ColumnDefinitions="4*, 6*">
 
-                        <!-- SOL SÜTUN (Sütun 0): DONUT GRAFİĞİ -->
-                        <!-- Grafiğin kendi kendine yayılmasını engellemek için Grid.Column="0" olarak açıkça belirttik -->
-                        <Grid Grid.Column="0" VerticalOptions="Center">
-                            <micro:ChartView x:Name="ExpenseChartView" HeightRequest="200"/>
+                        <!-- SOL SÜTUN (Sütun 0): Sadece Grafik Alanı -->
+                        <Grid Grid.Column="0" VerticalOptions="Center" Margin="0,0,0,10">
+                            <micro:ChartView x:Name="ExpenseChartView" HeightRequest="160" VerticalOptions="Center"/>
+
+                            <!-- Ortadaki Toplam Yazısı -->
                             <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" InputTransparent="True">
                                 <Label Text="Toplam" FontSize="11" HorizontalOptions="Center" TextColor="Gray"/>
-                                <Label x:Name="TotalExpenseLabel" Text="0 ₺" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" TextColor="Black"/>
+                                <Label x:Name="TotalExpenseLabel" Text="0 ₺" FontSize="16" FontAttributes="Bold" HorizontalOptions="Center" TextColor="Black"/>
                             </VerticalStackLayout>
                         </Grid>
 
-                        <!-- SAĞ SÜTUN (Sütun 1): MİNİ HARCAMA LİSTESİ -->
-                        <!-- Grafikle arasına biraz nefes payı (Margin) koyduk -->
-                        <ScrollView Grid.Column="1" Margin="10,0,0,0" VerticalScrollBarVisibility="Never">
+                        <!-- SAĞ SÜTUN (Sütun 1): Kaydırılabilir Harcama Listesi -->
+                        <ScrollView Grid.Column="1" Margin="10,0,0,0" HeightRequest="220" VerticalScrollBarVisibility="Default">
                             <VerticalStackLayout x:Name="MiniExpenseList" Spacing="8" Padding="5"/>
                         </ScrollView>
-
                     </Grid>
+
+                    <!-- Araya ince bir ayırıcı çizgi -->
+                    <BoxView HeightRequest="1" Color="#F0F0F0" Margin="0,5"/>
+
+                    <!-- ALT KISIM: Gösterge Alanı (Renkli Kategori İsimleri) -->
+                    <!-- Bu alan artık Grid'in dışında olduğu için Android'de grafik üstüne binmez -->
+                    <FlexLayout x:Name="ChartLegendLayout" 
+                    Wrap="Wrap" 
+                    JustifyContent="Center" 
+                    AlignItems="Center" 
+                    Margin="0,5,0,0"
+                    Padding="5" />
+
                 </VerticalStackLayout>
             </Frame>
-
+            
             <!-- LOADING -->
             <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False" IsRunning="False" Color="#2196F3" HorizontalOptions="Center"/>
 

@@ -9,6 +9,8 @@ using Microcharts.Maui;
 using Microsoft.Maui.Controls.Shapes;
 using Newtonsoft.Json;
 using SkiaSharp;
+using SkiaSharp.Views.Maui;
+using SkiaSharp.Views.Maui.Controls;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Input;
@@ -336,7 +338,7 @@ public partial class MainPage : ContentPage
             }
             else if (action == "Hakkında")
             {
-                await DisplayAlert("Hakkında", "ÖPT - Öğrenci Para Takip\nBursa Uludağ Üniversitesi \nBTK Hackathon 2026 Projesi", "Tamam");
+                await DisplayAlert("Hakkında", "ÖPT - Öğrenci Para Takip\nBursa Uludağ Üniversitesi \nBTK Hackathon 2026 Projesi \nAhmet Behlül Özer", "Tamam");
             }
         }
         catch (Exception ex)
@@ -458,7 +460,7 @@ public partial class MainPage : ContentPage
                     Total = g.Sum(e => e.Amount)
                 }).ToList();
 
-            var entries = new List<ChartEntry>();
+            var entries = new List<Microcharts.ChartEntry>();
             string[] colors = { "#3498DB", "#E74C3C", "#2ECC71", "#F1C40F", "#9B59B6" };
             int colorIndex = 0;
 
@@ -490,10 +492,77 @@ public partial class MainPage : ContentPage
                 };
             });
 
+
+            // DİKKAT: İsmini 'donutEntries' yapmıştık, o şekilde devam ediyoruz
+            var donutEntries = new List<Microcharts.ChartEntry>();
+
+            // Eski göstergeleri temizliyoruz
+            ChartLegendLayout.Children.Clear();
+
+            // 1. ÇÖZÜM: KATEGORİLERİ TEK TİP YAPARAK GRUPLAMA (Büyük/küçük harf ve boşlukları düzeltme)
+            var categoryGroups = allExpenses.GroupBy(e =>
+                string.IsNullOrWhiteSpace(e.Category) ? "Diğer" :
+                char.ToUpper(e.Category.Trim()[0]) + e.Category.Trim().Substring(1).ToLower()
+            );
+
+            foreach (var group in categoryGroups)
+            {
+                string categoryName = group.Key;
+                Color categoryColor = GetColorForCategory(categoryName);
+
+                // --- 2. ÇÖZÜM: GRAFİK DİLİMİ TEMİZLİĞİ ---
+                var entry = new Microcharts.ChartEntry((float)group.Sum(e => e.Amount))
+                {
+                    // Label ve ValueLabel içini BOŞ bırakıyoruz ki grafiğin etrafında o karmaşık yazılar çıkmasın!
+                    Label = "",
+                    ValueLabel = "",
+                    Color = categoryColor.ToSKColor()
+                };
+
+                donutEntries.Add(entry);
+
+                // --- GÖSTERGE (LEGEND) KISMI ---
+                var legendItem = new HorizontalStackLayout
+                {
+                    Spacing = 6,
+                    Margin = new Thickness(5, 2),
+                    Children =
+                    {
+                        new Border
+                        {
+                            WidthRequest = 12,
+                            HeightRequest = 12,
+                            BackgroundColor = categoryColor,
+                            StrokeShape = new RoundRectangle { CornerRadius = 6 },
+                            VerticalOptions = LayoutOptions.Center
+                        },
+                        new Label
+                        {
+                            Text = categoryName,
+                            FontSize = 11,
+                            TextColor = Colors.DarkGray,
+                            VerticalOptions = LayoutOptions.Center
+                        }
+                    }
+                };
+
+                ChartLegendLayout.Children.Add(legendItem);
+            }
+
+            // DÖNGÜ BİTTİKTEN SONRA: Yeni listemizi grafiğe bağlıyoruz
+            ExpenseChartView.Chart = new Microcharts.DonutChart
+            {
+                Entries = donutEntries,
+                BackgroundColor = SkiaSharp.SKColors.Transparent,
+                HoleRadius = 0.6f
+            };
+
+
             await UpdateTrendChart(allExpenses, filterData != null);
 
             MiniExpenseList.Children.Clear();
-            var recentExpenses = allExpenses.OrderByDescending(x => x.Date).Take(5);
+            // Tüm harcamaları alıyoruz veya performansı korumak için Take(50) gibi geniş bir limit de verebilirsin.
+            var recentExpenses = allExpenses.OrderByDescending(x => x.Date).Take(50);
 
             foreach (var exp in recentExpenses)
             {
@@ -510,14 +579,35 @@ public partial class MainPage : ContentPage
                     VerticalOptions = LayoutOptions.Center
                 };
 
-                // 2. SOL TARAF: Senin eski orijinal tasarımın (Kategori üstte, Tutar altta)
+                // 2. SOL TARAF: Kategori, Açıklama ve Tutarın Alt Alta Dizilmesi
                 var textLayout = new VerticalStackLayout
                 {
                     VerticalOptions = LayoutOptions.Center,
-                    Spacing = 4, // Kategori adı ile tutar yazısı arasına minik bir nefes payı ekledik
+                    Spacing = 4, // Yazılar arasına minik bir nefes payı
                     Children = {
-                        new Label { Text = exp.Category, FontSize = 14, FontAttributes = FontAttributes.Bold, TextColor = Colors.Black },
-                        new Label { Text = exp.Amount.ToString("N0") + " ₺", FontSize = 12, TextColor = Colors.DarkGreen }
+                        // 1. Kategori (En üstte, kalın ve belirgin)
+                        new Label {
+                            Text = exp.Category,
+                            FontSize = 14,
+                            FontAttributes = FontAttributes.Bold,
+                            TextColor = Colors.Black
+                        },
+                        
+                        // 2. YENİ EKLENEN: Açıklama (Kategorinin hemen altında, küçük ve zarif)
+                        new Label {
+                            Text = exp.Description,
+                            FontSize = 11,
+                            TextColor = Colors.Gray,
+                            MaxLines = 1,
+                            LineBreakMode = LineBreakMode.TailTruncation
+                        },
+
+                        // 3. Tutar (En altta, yeşil renkte)
+                        new Label {
+                            Text = exp.Amount.ToString("N0") + " ₺",
+                            FontSize = 12,
+                            TextColor = Colors.DarkGreen
+                        }
                     }
                 };
 
@@ -696,7 +786,7 @@ public partial class MainPage : ContentPage
             recentExpenses.Insert(0, new { ExactDate = singleDate.AddDays(-1), Total = 0.0 });
         }
 
-        var entries = new List<ChartEntry>();
+        var entries = new List<Microcharts.ChartEntry>();
         foreach (var item in recentExpenses)
         {
             entries.Add(new ChartEntry((float)item.Total)
@@ -753,5 +843,31 @@ public partial class MainPage : ContentPage
         OnAddExpenseClicked(sender, e);
     }
 
+    // Kategori ismine göre renk döndüren yardımcı C# metodu
+    private Color GetColorForCategory(string categoryName)
+    {
+        // switch yapısı, gelen kategoriName değişkenini kontrol eder
+        switch (categoryName)
+        {
+            case "Yemek":
+                return Color.FromArgb("#FFB300"); // Canlı Turuncu
+
+            case "Ulaşım":
+                return Color.FromArgb("#1E88E5"); // Mavi
+
+            case "Eğitim":
+                return Color.FromArgb("#43A047"); // Yeşil
+
+            case "Market":
+                return Color.FromArgb("#E53935"); // Kırmızı
+
+            case "Eğlence":
+                return Color.FromArgb("#8E24AA"); // Mor
+
+            // Eğer kategori bu yukarıdakilerden hiçbiri değilse (örneğin boşsa veya farklıysa)
+            default:
+                return Color.FromArgb("#757575"); // Nötr Gri (Varsayılan Renk)
+        }
+    }
 
 }

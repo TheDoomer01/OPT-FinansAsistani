@@ -5,6 +5,13 @@
 		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('linux'))">$(TargetFrameworks);net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
 
+		<!-- Android derleme uyarılarını (JDK sürüm uyuşmazlığı dahil) bastırır -->
+		<NoWarn>$(NoWarn);JDK0001</NoWarn>
+		<!-- 64k metot limitini aşan büyük projeler için çoklu indekslemeyi etkinleştirir -->
+		<AndroidBuildEnableMultiDex>true</AndroidBuildEnableMultiDex>
+		<!-- Kütüphaneleri APK içine gömerek emülatörlerde çalışma kararlılığını artırır -->
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+		
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
 		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.

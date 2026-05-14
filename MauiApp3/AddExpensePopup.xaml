@@ -21,10 +21,20 @@
                             <x:String>Eğitim</x:String>
                             <x:String>Market</x:String>
                             <x:String>Eğlence</x:String>
+                            <x:String>Diğer</x:String>
                         </x:Array>
                     </Picker.ItemsSource>
                 </Picker>
             </Border>
+
+            <!-- YENİ EKLENEN: Diğer seçildiğinde açılacak gizli kutu -->
+            <!-- Varsayılan olarak IsVisible="False" yani gizlidir -->
+            <Entry x:Name="CustomCategoryEntry" 
+                           Placeholder="Kendi kategori adınızı yazın..." 
+                           TextColor="Black"
+                           PlaceholderColor="Gray"
+                           IsVisible="False" 
+                           Margin="10,0,10,10" />
 
             <VerticalStackLayout BackgroundColor="White" Padding="25" Spacing="15" WidthRequest="320">
                 <Label Text="Fiş Taraması" TextColor="Black" FontSize="18" FontAttributes="Bold" HorizontalOptions="Center"/>

@@ -24,6 +24,16 @@ public partial class AddExpensePopup : Popup
     {
         try
         {
+            // Veritabanına kaydedilecek kategoriyi önce Picker'dan alıyoruz
+            string finalCategory = CategoryPicker.SelectedItem.ToString();
+
+            // Eğer kullanıcı 'Diğer'i seçmişse ve kendi kutusunu boş bırakmamışsa
+            if (finalCategory == "Diğer" && !string.IsNullOrWhiteSpace(CustomCategoryEntry.Text))
+            {
+                // Kaydedilecek kategoriyi kullanıcının yazdığı yeni kelime ile değiştir
+                finalCategory = CustomCategoryEntry.Text.Trim();
+            }
+
             // 1. ZORUNLU ALAN KONTROLÜ: Tutar geçerli bir sayı mı?
             if (string.IsNullOrWhiteSpace(AmountEntry.Text) || !double.TryParse(AmountEntry.Text, out double girilenTutar))
             {
@@ -144,8 +154,9 @@ public partial class AddExpensePopup : Popup
 
             // 2. Gemini'ye talimat gönder (Prompt Engineering)
             string prompt = "Bu bir alışveriş fişi. Eğer market fişine benzeyen bir kağıt görürsen kategoriyi 'Market' olarak belirle. Diğer durumlarda içeriğe göre Yemek, Ulaşım veya Eğlence olarak sınıflandır. " +
+                            "Ayrıca fişin ait olduğu mağazanın adını veya en mantıklı kısa açıklamayı 'Description' alanına ekle. " +
                             "Cevabı sadece şu JSON formatında ver, başka metin ekleme: " +
-                            "{ \"Amount\": 0.0, \"Category\": \"...\", \"Date\": \"yyyy-MM-dd\" }";
+                            "{ \"Amount\": 0.0, \"Category\": \"...\", \"Date\": \"yyyy-MM-dd\" ,\"Description\"...\" }";
 
             // 3. Gemini Servisini çağır
             var resultJson = await _geminiService.AnalyzeImageAsync(prompt, base64Image);
@@ -185,6 +196,9 @@ public partial class AddExpensePopup : Popup
                     if (CategoryPicker.Items.Contains(expenseData.Category))
                         CategoryPicker.SelectedItem = expenseData.Category;
 
+                    // YENİ: Yapay zekanın bulduğu mağaza/açıklama bilgisini ekrandaki kutuya yazdır
+                    DescEntry.Text = expenseData.Description;
+
                     await App.Current.MainPage.DisplayAlert("Başarılı", "Fiş bilgileri başarıyla ayıklandı ve forma eklendi!", "Tamam");
                 });
             }
@@ -205,8 +219,23 @@ public partial class AddExpensePopup : Popup
     // Parametrelerin (object sender, EventArgs e) olması ŞARTTIR.
     private async void OnCategorySelected(object sender, EventArgs e)
     {
+
         var picker = (Picker)sender;
         int selectedIndex = picker.SelectedIndex;
+
+        // Kullanıcı bir şey seçtiyse ve seçtiği şey "Diğer" ise
+        if (CategoryPicker.SelectedItem != null && CategoryPicker.SelectedItem.ToString() == "Diğer")
+
+        {
+            // Gizli metin kutusunu göster
+            CustomCategoryEntry.IsVisible = true;
+        }
+        else
+        {
+            // "Diğer" dışında bir şey seçildiyse kutuyu geri gizle ve içini temizle
+            CustomCategoryEntry.IsVisible = false;
+            CustomCategoryEntry.Text = string.Empty;
+        }
 
         // Eğer yanlışlıkla tetiklendiyse veya seçim boşsa çık
         if (selectedIndex != -1) return;

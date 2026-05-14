@@ -25,7 +25,7 @@ Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyebi
    git clone [https://github.com/TheDoomer01/OPT-FinansAsistani.git](https://github.com/TheDoomer01/OPT-FinansAsistani.git)
 2. Gerekli SDK'ları Kontrol Edin:
     - .NET 8.0 veya üzeri SDK'nın yüklü olduğundan emin olun.
-    - Visual Studio 2022 içerisinde ".NET Multi-platform App UI development" iş yükünün yüklü olduğunu doğrulayın.
+    - Visual Studio 2026 (veya 2022) içerisinde ".NET Multi-platform App UI development" iş yükünün yüklü olduğunu doğrulayın.
 
 3. Bağımlılıkları Yükleyin:
     Proje dizinine gidin ve aşağıdaki komutu çalıştırarak gerekli NuGet paketlerini yükleyin:
@@ -42,7 +42,8 @@ Projemiz güvenlik nedeniyle gerçek API anahtarlarını GitHub üzerinde barın
    *(Terminal kullanıyorsanız şu komutu girebilirsiniz:)*
    ```bash
    cp secrets.example.json secrets.json
-          
+
+          
 - İçeriği Doldurun:
    Yeni oluşturduğunuz secrets.json dosyasını bir metin editörüyle açın ve kendi Google Gemini API anahtarınızı ilgili alana yapıştırın:
    {
