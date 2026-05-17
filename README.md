@@ -15,11 +15,11 @@ Bu proje öğrencilerin finansal durumlarını daha iyi anlamalarına ve harcama
 * Windows ve Android platformlarında çalışabilme
 
 
-## Ekran Görüntüleri	
-| Ana Ekran | Ana Ekran 2| | Ana Ekran 3 (Yeni Ekspre Ekle Özelliği) | Ayarlar | Harcama Ekle | 
+## 📱 Ekran Görüntüleri
+
+| Ana Ekran | Ana Ekran 2 | Ana Ekran 3 | Ayarlar | Harcama Ekle |
 | :---: | :---: | :---: | :---: | :---: |
-| ![Ana Sayfa](images/mainpage.jpg) | ![Ana Sayfa 2](images/mainpage2(new).jpg) | ![Ana Ekran 3](images/mainpage3(new).jpg) | ![Ayarlar](images/settings.jpg) | ![Harcama Ekle](images/addexpense.jpg) >|
-----
+| ![Ana Sayfa](images/mainpage.jpg) | ![Ana Sayfa 2](images/mainpage2(new).jpg) | ![Ana Ekran 3](images/mainpage3(new).jpg) | ![Ayarlar](images/settings.jpg) | ![Harcama Ekle](images/addexpense.jpg) |
 
 ## Kurulum (Setup)
 Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyebilirsiniz:
