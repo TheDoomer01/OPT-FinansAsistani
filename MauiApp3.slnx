@@ -7,6 +7,7 @@
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/addexpense.jpg" />
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/mainpage.jpg" />
     <File Path="../Users/Ahmet Behlül/Downloads/Phone Link/settings.jpg" />
+    <File Path="images/mainpage3(new).jpg" />
   </Folder>
   <Project Path="MauiApp3/MauiApp3.csproj">
     <Deploy Solution="Debug|*" />

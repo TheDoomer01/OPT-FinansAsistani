@@ -7,16 +7,18 @@ Bu proje öğrencilerin finansal durumlarını daha iyi anlamalarına ve harcama
 
 ## Öne Çıkan Özellikler
 * OCR ile fiş okuma
+* Ekspre ekleme ve analiz etme özelliği
 * Harcamaların kategorilere ayrılması ve haftalık veya aylık gibi grafikte gösterilmesi
-* Gemini API ile harcamaların analiz edilmesi 
+* Gemini API ile harcamaların analiz edilmesi
 * Bütçeye göre tasarruf önerileri sunulması 
 * Gemini API'si ekleme özelliği 
 * Windows ve Android platformlarında çalışabilme
 
+
 ## Ekran Görüntüleri	
-| Ana Ekran | Ana Ekran 2| Ayarlar | Harcama Ekle |
-| :---: | :---: | :---: | :---: |
-| ![Ana Sayfa](images/mainpage.jpg) | ![Ana Sayfa 2](images/mainpage2(new).jpg) | ![Ayarlar](images/settings.jpg) | ![Harcama Ekle](images/addexpense.jpg) >|
+| Ana Ekran | Ana Ekran 2| | Ana Ekran 3 (Yeni Ekspre Ekle Özelliği) | Ayarlar | Harcama Ekle | 
+| :---: | :---: | :---: | :---: | :---: |
+| ![Ana Sayfa](images/mainpage.jpg) | ![Ana Sayfa 2](images/mainpage2(new).jpg) | ![Ana Ekran 3](images/mainpage3(new).jpg) | ![Ayarlar](images/settings.jpg) | ![Harcama Ekle](images/addexpense.jpg) >|
 ----
 
 ## Kurulum (Setup)
