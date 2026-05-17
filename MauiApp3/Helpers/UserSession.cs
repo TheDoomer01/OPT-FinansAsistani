@@ -20,7 +20,7 @@ namespace MauiApp3.Helpers
         // İstersen Bölüm Bilgisini de ekleyebilirsin
         public static string Department
         {
-            get => Preferences.Default.Get(DepartmentKey, "Bilgisayar Programcılığı");
+            get => Preferences.Default.Get(DepartmentKey, "Bilgisayar Mühendisliği");
             set => Preferences.Default.Set(DepartmentKey, value);
         }
 

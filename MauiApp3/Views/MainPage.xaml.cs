@@ -13,6 +13,7 @@ using SkiaSharp.Views.Maui;
 using SkiaSharp.Views.Maui.Controls;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Linq.Expressions;
 using System.Windows.Input;
 
 namespace MauiApp3.Views;
@@ -22,6 +23,8 @@ public partial class MainPage : ContentPage
     private readonly GeminiService _geminiService;
     private readonly DatabaseService _databaseService;
     private bool isExpanded = false;
+    // Sınıfın en üstüne, metotların dışına ekle:
+    private FileResult _selectedStatementFile;
 
     public ObservableCollection<FinanceData> HistoryItems { get; set; } = new();
 
@@ -111,7 +114,7 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private async Task<string> GetSpendingSummaryAsync()
+    /* private async Task<string> GetSpendingSummaryAsync()
     {
         var expenses = await _databaseService.GetExpensesAsync();
         if (expenses == null || !expenses.Any())
@@ -123,6 +126,8 @@ public partial class MainPage : ContentPage
 
         return string.Join(", ", summary);
     }
+    */
+    
 
     async void OnFilterChanged(object sender, EventArgs e)
     {
@@ -173,40 +178,56 @@ public partial class MainPage : ContentPage
 
         try
         {
-            // 1. UI Hazırlığı (Zaten UI iş parçacığında tetiklendiği için güvenli)
+            // 1. UI Hazırlığı (Senin orijinal yapın)
             AnalyzeButton.IsEnabled = false;
             LoadingIndicator.IsVisible = true;
             LoadingIndicator.IsRunning = true;
 
             await Task.Delay(1000);
 
-            // 2. Verileri Topla
-            string spendingData = await GetSpendingSummaryAsync();
-            if (string.IsNullOrEmpty(spendingData)) spendingData = "Henüz harcama kaydı bulunmuyor.";
+            // 2. Verileri Topla (Tek değişiklik: Gemini'ye açıklamayı da fırlatıyoruz)
+            var expenses = await _databaseService.GetExpensesAsync();
+            string spendingData = "Henüz harcama bulunmuyor.";
 
-            string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcı öğrencisi. " +
+            if (expenses != null && expenses.Any())
+            {
+                // Gemini'nin "Diğer"i anlaması için Kategori yanına (Açıklamayı) ekledik
+                spendingData = string.Join(", ", expenses.Select(x => $"{x.Category} ({x.Description}): {x.Amount}TL"));
+            }
+
+            // Hafızadan üniversite ismini çekiyoruz
+            string universityName = string.IsNullOrWhiteSpace(UserSession.University) ? "Üniversite" : UserSession.University;
+
+            // 3. SENİN İLK PROMPTUN (Sadece Üniversite ismi ve küçük bir "açıklama" notu eklendi)
+            string prompt = $"Sen bir üniversite finansal asistanısın. Kullanıcı {universityName} öğrencisi. " +
                             $"Bugünkü bütçesi: {selectedBudget} TL. " +
                             $"Son harcamaları ve kategorileri: {spendingData}. " +
-                            "Bu verilere dayanarak; harcamaların bütçeye oranını analiz et, öğrenciye özel tasarruf " +
-                            "tavsiyeleri ve finansal haber başlıkları bul. " +
+                            $"Bu verilere dayanarak; harcamaların bütçeye oranını analiz et, öğrenciye özel {universityName} odaklı tasarruf " +
+                            "tavsiyeleri ve finansal haber başlıkları bul. (Not: Kategori 'Diğer' ise parantez içindeki açıklamayı da analiz et). " +
                             "Cevabı SADECE şu JSON formatında ver: " +
-                            "{ \"tavsiye\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
+                            "{ \"tavsiyeler\": \"...\", \"haberler\": [\"...\", \"...\", \"...\"] }";
 
-            // 3. API Çağrısı
+            // 4. API Çağrısı ve JSON Çözme (Arada hiçbir C# filtresi veya dayatması yok)
             var response = await _geminiService.GetResponseAsync(prompt);
 
-            // KONTROL 1: API Cevap Vermezse
+            // 🛑 EMNİYET KİLİDİ 1: Cevap tamamen boşsa
             if (string.IsNullOrWhiteSpace(response))
             {
-                // Android güvenliği için UI kodlarını InvokeOnMainThreadAsync içine alıyoruz
-                await MainThread.InvokeOnMainThreadAsync(async () =>
-                {
-                    await DisplayAlert("Bağlantı Hatası", "Yapay zeka cevap vermedi. İnternet iznini veya API Anahtarını kontrol et.", "Tamam");
+                await MainThread.InvokeOnMainThreadAsync(async () => {
+                    await DisplayAlert("API Hatası", "Yapay zekadan boş cevap döndü. İnterneti kontrol edin.", "Tamam");
                 });
                 return;
             }
 
-            // KONTROL 2: Markdown Temizliği
+            // 🛑 EMNİYET KİLİDİ 2: Kota sınırına (429) yakalandıysak sessizce geçme, uyar!
+            if (response.Contains("429") || response.ToLower().Contains("quota") || response.ToLower().Contains("exhausted"))
+            {
+                await MainThread.InvokeOnMainThreadAsync(async () => {
+                    await DisplayAlert("Kota Sınırı (429)", "Gemini ücretsiz kullanım kotanız doldu. Lütfen 1-2 dakika bekleyip tekrar deneyin. ⏳", "Tamam");
+                });
+                return;
+            }
+
             response = response.Replace("```json", "").Replace("```", "").Trim();
             int start = response.IndexOf("{");
             int end = response.LastIndexOf("}");
@@ -218,48 +239,45 @@ public partial class MainPage : ContentPage
 
                 if (result != null)
                 {
+                    var jObj = Newtonsoft.Json.Linq.JObject.Parse(cleanJson);
+                    result.tavsiye = jObj["tavsiyeler"]?.ToString() ?? jObj["Tavsiyeler"]?.ToString() ?? jObj["tavsiye"]?.ToString() ?? result.tavsiye;
+                    result.haberler = jObj["haberler"]?.ToObject<List<string>>() ?? jObj["Haberler"]?.ToObject<List<string>>() ?? result.haberler;
                     result.KayitTarihi = DateTime.Now;
 
                     // Veritabanı ve Önbellek Kayıtları
                     await _databaseService.AddAnalysisAsync(result);
                     Preferences.Default.Set("LastFinanceData", JsonConvert.SerializeObject(result));
 
-                    // 4. BAŞARILI DURUM: Popup'ı ve UI'ı ana iş parçacığında güvenle aç!
+                    // UI Güncelleme ve Popup Açılışı
                     await MainThread.InvokeOnMainThreadAsync(() =>
                     {
+                        // Ekrandaki label'lara temiz veriyi basıyoruz
+                        if (AdviceLabel != null) AdviceLabel.Text = result.tavsiye;
+                        if (NewsLabel != null && result.haberler != null) NewsLabel.Text = "• " + string.Join("\n• ", result.haberler);
+
                         UpdateUI(result);
                         this.ShowPopup(new AnalysisPopup(result));
                     });
 
                     _ = LoadHistory();
                 }
-                else
-                {
-                    await MainThread.InvokeOnMainThreadAsync(async () =>
-                    {
-                        await DisplayAlert("Dönüştürme Hatası", "Gelen veri okunamadı.", "Tamam");
-                    });
-                }
             }
             else
             {
-                await MainThread.InvokeOnMainThreadAsync(async () =>
-                {
-                    await DisplayAlert("Format Hatası", "JSON bulunamadı. Gelen cevap:\n" + response, "Tamam");
+                // 🛑 EMNİYET KİLİDİ 3: Format bozuk geldiyse ne geldiğini ekrana bas ki görelim
+                await MainThread.InvokeOnMainThreadAsync(async () => {
+                    await DisplayAlert("Format Hatası", "Yapay zeka geçerli bir JSON döndüremedi. Gelen ham veri:\n" + response, "Tamam");
                 });
             }
         }
         catch (Exception ex)
         {
-            // 5. KRİTİK HATA YAKALAMA: Uygulamanın sessizce çökmesini engeller
-            await MainThread.InvokeOnMainThreadAsync(async () =>
-            {
-                await DisplayAlert("Sistem Hatası", "Kod çöktü: " + ex.Message, "Tamam");
+            await MainThread.InvokeOnMainThreadAsync(async () => {
+                await DisplayAlert("Sistem Hatası", ex.Message, "Tamam");
             });
         }
         finally
         {
-            // 6. HER DURUMDA UI SIFIRLAMA
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 LoadingIndicator.IsVisible = false;
@@ -268,6 +286,7 @@ public partial class MainPage : ContentPage
             });
         }
     }
+
     void UpdateUI(FinanceData data)
     {
         if (data == null) return;
@@ -313,12 +332,29 @@ public partial class MainPage : ContentPage
 
             if (action == "Verileri Sıfırla")
             {
-                // Kullanıcıya onay soruyoruz. Vazgeç'e basarsa 'isConfirmed' false olur ve if içine girmez.
+                // Kullanıcıya onay soruyoruz.
                 bool isConfirmed = await DisplayAlert("Dikkat", "Tüm harcama verileri ve üniversite adınız silinsin mi?", "Evet, Sıfırla", "Vazgeç");
 
                 if (isConfirmed)
                 {
+                    // 1. ADIM: Mevcut silme metodun aynen çalışıyor (Verileri arkada uçurur)
                     await HandleClearSession();
+
+                    // 2. ADIM: YENİ EKLENEN KISIM (Grafikleri ve ekranı anlık sıfırlama)
+                    // .NET MAUI'de ekranın donmasını engelleyen ana iplik tetikleyicisi
+                    MainThread.BeginInvokeOnMainThread(async () =>
+                    {
+                        // Ana grafiği güncelle (veritabanı temizlendiği için grafik de sıfırlanacak)
+                        await UpdateChart();
+
+                        // Trend grafiğine bomboş bir liste göndererek onu da anlık olarak temizle
+                        var bosListe = new List<Expense>();
+                        await UpdateTrendChart(bosListe, false);
+
+                        // NOT: Eğer MainPage üzerinde toplam harcamayı yazdırdığın bir Label varsa 
+                        // onun da eski veride kalmaması için elinle sıfırlayabilirsin. Örnek:
+                        // ToplamTutarLabel.Text = "0 ₺";
+                    });
                 }
             }
             else if (action == "API Anahtarını Sil")
@@ -397,12 +433,61 @@ public partial class MainPage : ContentPage
 
     private async Task HandleClearSession()
     {
-        if (await DisplayAlert("Dikkat", "Tüm veriler silinsin mi?", "Evet", "Hayır"))
+        try
         {
+            // 1. ADIM: VERİTABANINI TAMAMEN TEMİZLE
+            // SQLite içindeki tüm harcamaları uçuruyoruz
+            if (_databaseService != null)
+            {
+                // Bir önceki adımda yazdığımız tümünü silme metodunu çağırıyoruz
+                await _databaseService.ClearAllExpensesAsync();
+            }
+
+            // 2. ADIM: CACHE VE OTURUM VERİLERİNİ SİL
             UserSession.ClearSession();
             Preferences.Default.Remove("LastFinanceData");
-            UniEntry.Text = string.Empty;
-            await DisplayAlert("Başarılı", "Sıfırlandı.", "Tamam");
+
+            // Üniversite giriş kutusunu boşalt
+            if (UniEntry != null) UniEntry.Text = string.Empty;
+
+            // 3. ADIM: ARAYÜZÜ (UI) VE GEÇMİŞ ANALİZLERİ ANLIK SIFIRLAMA
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                // Ana grafiği ve trend grafiğini boşalt (Gri halkaya dönecekler)
+                await UpdateChart();
+                await UpdateTrendChart(new List<Expense>(), false);
+
+                if (HistoryList != null)
+                {
+                    HistoryList.Children.Clear();                }
+
+                if (MiniExpenseList != null)
+                {
+                    MiniExpenseList.Children.Clear();
+                }
+                if (AdviceLabel != null)
+                {
+                    AdviceLabel.Text = "Henüz bir finansal analiz yapılmadı.";
+                }
+
+                if (NewsLabel != null)
+                {
+                    NewsLabel.Text = "Geçmiş finansal haberler sıfırlandı.";
+                }
+                if (Preferences.Default.ContainsKey("LastFinanceData"))
+                {
+                    Preferences.Default.Remove("LastFinanceData");
+                }
+                await _databaseService.ClearAllExpensesAsync(); // Harcamaları sil
+                await _databaseService.ClearAllAnalysisAsync(); // Analiz geçmişini de sil (metodunun adı her neyse)
+
+            });
+
+            await DisplayAlert("Başarılı", "Tüm harcamalar, geçmiş analizler ve kategoriler sıfırlandı! 🧹", "Tamam");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Hata", $"Sıfırlama esnasında bir hata oluştu: {ex.Message}", "Tamam");
         }
     }
 
@@ -435,9 +520,17 @@ public partial class MainPage : ContentPage
 
             if (allExpenses == null || !allExpenses.Any())
             {
-                MainThread.BeginInvokeOnMainThread(() => {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    // Önce grafiği tamamen boşa çıkarıp eski text önbelleğini temizliyoruz
+                    ExpenseChartView.Chart = null;
+                    if (ChartLegendLayout != null)
+                    {
+                        ChartLegendLayout.Children.Clear();
+                    }
                     var emptyEntries = new List<ChartEntry> {
-                        new ChartEntry(1) { Color = SKColor.Parse("#E0E0E0") }
+                        // Label ve ValueLabel alanlarını açıkça boş string yapıyoruz ki eski yazılar ezilsin
+                    new ChartEntry(1) { Color = SKColor.Parse("#E0E0E0"), Label = "", ValueLabel = "" }
                     };
                     ExpenseChartView.Chart = new DonutChart
                     {
@@ -447,6 +540,7 @@ public partial class MainPage : ContentPage
                         HoleRadius = 0.6f
                     };
                     if (TotalExpenseLabel != null) TotalExpenseLabel.Text = "0 ₺";
+                    
                 });
 
                 await UpdateTrendChart(allExpenses, filterData != null);
@@ -455,7 +549,8 @@ public partial class MainPage : ContentPage
 
             var categoryTotals = allExpenses
                 .GroupBy(e => string.IsNullOrWhiteSpace(e.Category) ? "DİĞER" : e.Category.Trim().ToUpper())
-                .Select(g => new {
+                .Select(g => new
+                {
                     Category = g.Key,
                     Total = g.Sum(e => e.Amount)
                 }).ToList();
@@ -477,7 +572,8 @@ public partial class MainPage : ContentPage
 
             var totalSpent = allExpenses.Sum(e => e.Amount);
 
-            MainThread.BeginInvokeOnMainThread(() => {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
                 TotalExpenseLabel.Text = totalSpent.ToString("N0") + " ₺";
                 ExpenseChartView.Chart = new DonutChart
                 {
@@ -761,7 +857,8 @@ public partial class MainPage : ContentPage
 
         var recentExpenses = recentExpensesQuery
             .GroupBy(e => new DateTime(e.Date.Year, e.Date.Month, e.Date.Day))
-            .Select(g => new {
+            .Select(g => new
+            {
                 ExactDate = g.Key,
                 Total = g.Sum(e => e.Amount)
             })
@@ -870,4 +967,178 @@ public partial class MainPage : ContentPage
         }
     }
 
+    private async void OnEkstreYukleClicked(object sender, EventArgs e)
+    {
+        try
+        {
+            // 1. DOSYA SEÇİMİ
+            var customFileType = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+        {
+            { DevicePlatform.Android, new[] { "application/pdf", "image/jpeg", "image/png" } },
+            { DevicePlatform.WinUI, new[] { ".pdf", ".jpg", ".jpeg", ".png" } }
+        });
+
+            var options = new PickOptions { PickerTitle = "Ekstre veya Fiş Seç", FileTypes = customFileType };
+            var result = await FilePicker.Default.PickAsync(options);
+
+            // Seçilen dosyayı hafızaya alıyoruz (Diğer buton kullansın diye)
+            _selectedStatementFile = result;
+
+            if (result == null) return;
+
+            // Önizleme Resmi Mantığın
+            if (result.FileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || result.FileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            {
+                if (PreviewImage != null)
+                {
+                    PreviewImage.Source = ImageSource.FromStream(() => _selectedStatementFile.OpenReadAsync().Result);
+                    PreviewImage.IsVisible = true;
+
+                    // Çarpı butonunu da burada görünür yapıyoruz
+                    if (ClosePreviewButton != null) ClosePreviewButton.IsVisible = true;
+                }
+            }
+
+            // Durum etiketini güncelle ve TAMAM butonunu görünür yap!
+            if (StatusLabel != null)
+                StatusLabel.Text = $"Seçilen Dosya: {result.FileName} 📄";
+
+            if (ConfirmAnalyzeButton != null)
+                ConfirmAnalyzeButton.IsVisible = true; // XAML tarafındaki Tamam butonu açılır
+
+            // 🛑 BURADA DURUYORUZ! 
+            // Geri kalan tüm API ve veritabanı kodlarını bu metodun içinden temizledik.
+            // Çünkü o kodlar zaten OnConfirmAnalyzeClicked metodunun içinde tıkır tıkır çalışıyor.
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Sistem Hatası", $"Dosya seçilirken bir hata oluştu: {ex.Message}", "Tamam");
+        }
+    }
+    private async void OnConfirmAnalyzeClicked(object sender, EventArgs e)
+    {
+        if (_selectedStatementFile == null) return;
+
+        try
+        {
+            // UI Kilitle ve Loading Göster
+            if (ConfirmAnalyzeButton != null) ConfirmAnalyzeButton.IsEnabled = false;
+            if (StatusLabel != null) StatusLabel.Text = "Yapay Zeka Okuyor... ⏳";
+
+            // 2. SECURE STORAGE'DAN ANAHTARI AL
+            string apiAnahtarim = await SecureStorage.Default.GetAsync("UserApiKey");
+            if (string.IsNullOrEmpty(apiAnahtarim))
+            {
+                await DisplayAlert("Hata", "Lütfen ayarlardan API anahtarınızı girin.", "Tamam");
+                return;
+            }
+
+            // 3. GEMINI'YE GÖNDER (Hafızadaki dosyayı açıyoruz)
+            using var imageStream = await _selectedStatementFile.OpenReadAsync();
+            var geminiService = new GeminiVisionService(apiAnahtarim);
+            string aiYaniti = await geminiService.EkstreAnalizEt(imageStream, _selectedStatementFile.FileName);
+
+            if (aiYaniti.StartsWith("API_ERROR") || aiYaniti.StartsWith("EXCEPTION"))
+            {
+                await DisplayAlert("Google AI Hatası", aiYaniti, "Tamam");
+                return;
+            }
+
+            // Temizlik
+            aiYaniti = aiYaniti.Replace("```json", "").Replace("```", "").Trim();
+
+            // 4. JARRAY AYRIŞTIRMASI (Senin kurşun geçirmez eşleştirme mantığın birebir korundu)
+            var jsonArray = Newtonsoft.Json.Linq.JArray.Parse(aiYaniti);
+
+            if (jsonArray != null && jsonArray.Count > 0)
+            {
+                var dbService = _databaseService;
+                int eklenenKayitSayisi = 0;
+
+                foreach (var item in jsonArray)
+                {
+                    var tutarToken = item["Amount"] ?? item["amount"] ?? item["Tutar"] ?? item["tutar"] ?? item["Miktar"] ?? item["miktar"];
+                    var tarihToken = item["Date"] ?? item["date"] ?? item["Tarih"] ?? item["tarih"];
+                    var kategoriToken = item["Category"] ?? item["category"] ?? item["Kategori"] ?? item["kategori"];
+                    var aciklamaToken = item["Description"] ?? item["description"] ?? item["Aciklama"] ?? item["aciklama"];
+
+                    double asilMiktar = 0;
+                    if (tutarToken != null)
+                    {
+                        string rawTutar = tutarToken.ToString().Trim();
+                        string sadeceSayi = new string(rawTutar.Where(c => char.IsDigit(c) || c == '.' || c == ',').ToArray());
+
+                        if (sadeceSayi.Contains(",") && sadeceSayi.Contains("."))
+                        {
+                            sadeceSayi = sadeceSayi.Replace(",", "");
+                        }
+                        else if (sadeceSayi.Contains(","))
+                        {
+                            sadeceSayi = sadeceSayi.Replace(",", ".");
+                        }
+
+                        double.TryParse(sadeceSayi, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out asilMiktar);
+                    }
+
+                    // Senin o hayalet veri filtren
+                    if (asilMiktar <= 0) continue;
+
+                    var yeniHarcama = new Expense
+                    {
+                        Date = (tarihToken != null && DateTime.TryParse(tarihToken.ToString(), out DateTime dt)) ? dt : DateTime.Now,
+                        Amount = asilMiktar,
+                        Category = kategoriToken?.ToString() ?? "Diğer",
+                        Description = aciklamaToken?.ToString() ?? "Ekstreden eklendi"
+                    };
+
+                    await dbService.AddExpenseAsync(yeniHarcama);
+                    eklenenKayitSayisi++;
+                }
+
+                if (StatusLabel != null) StatusLabel.Text = $"Başarılı! {eklenenKayitSayisi} harcama eklendi. ✅";
+                await DisplayAlert("Başarılı", $"{eklenenKayitSayisi} adet harcama ekstrenizden başarıyla okundu!", "Harika");
+
+                // 5. ANLIK GRAFİK GÜNCELLEME (MainThread Sihri)
+                MainThread.BeginInvokeOnMainThread(async () =>
+                {
+                    await UpdateChart();
+                    var allExpenses = await _databaseService.GetExpensesAsync();
+                    await UpdateTrendChart(allExpenses, false);
+                });
+
+                // İşlem bitti, onay butonunu kapat ve hafızayı temizle
+                if (ConfirmAnalyzeButton != null) ConfirmAnalyzeButton.IsVisible = false;
+                _selectedStatementFile = null;
+                if (PreviewImage != null)
+                {
+                    PreviewImage.Source = ImageSource.FromStream(() => _selectedStatementFile.OpenReadAsync().Result);
+                    PreviewImage.IsVisible = true;
+
+                    // 👇 BU SATIRI EKLE (Çarpı butonu da resimle birlikte ekranda belirir)
+                    if (ClosePreviewButton != null) ClosePreviewButton.IsVisible = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Sistem Hatası", $"İşlem sırasında bir hata oluştu: {ex.Message}", "Tamam");
+        }
+        finally
+        {
+            if (ConfirmAnalyzeButton != null) ConfirmAnalyzeButton.IsEnabled = true;
+        }
+    }
+    private void OnClosePreviewClicked(object sender, EventArgs e)
+    {
+        // 1. Görselleri ve butonları gizle
+        if (PreviewImage != null) PreviewImage.IsVisible = false;
+        if (ClosePreviewButton != null) ClosePreviewButton.IsVisible = false;
+        if (ConfirmAnalyzeButton != null) ConfirmAnalyzeButton.IsVisible = false;
+
+        // 2. HAFIZAYI SIFIRLA (Bak burada 'result = null' değil, alttakini yazıyoruz)
+        _selectedStatementFile = null;
+
+        // 3. Yazıyı eski orijinal haline döndür (Burada result.FileName KULLANMA)
+        if (StatusLabel != null) StatusLabel.Text = "Henüz dosya seçilmedi.";
+    }
 }

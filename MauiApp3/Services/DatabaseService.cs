@@ -69,5 +69,17 @@ namespace MauiApp3.Services
                                   .OrderByDescending(x => x.Date) // En yeniler en üstte
                                   .ToListAsync();
         }
+        public async Task ClearAllExpensesAsync()
+        {
+            // SQLite bağlantı nesnenin adı '_database' veya '_connection' olabilir, ona göre uyarla
+            await _db.DeleteAllAsync<Expense>();
+        }
+
+        public async Task ClearAllAnalysisAsync()
+        {
+            // SQLite bağlantı nesnenin adı neyse (örneğin _database veya _connection) 
+            // İçerideki tüm FinanceData (Analiz) kayıtlarını tek hamlede uçuruyoruz
+            await _db.DeleteAllAsync<FinanceData>();
+        }
     }
 }
