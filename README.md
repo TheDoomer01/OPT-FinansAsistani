@@ -21,7 +21,25 @@ Bu proje öğrencilerin finansal durumlarını daha iyi anlamalarına ve harcama
 | :---: | :---: | :---: | :---: | :---: |
 | ![Ana Sayfa](images/mainpage.jpg) | ![Ana Sayfa 2](images/mainpage2(new).jpg) | ![Ana Ekran 3](images/mainpage3(new).jpg) | ![Ayarlar](images/settings.jpg) | ![Harcama Ekle](images/addexpense.jpg) |
 
+
+## 📥 Uygulama Nasıl Kurulur ve Çalıştırılır? (Kaynak Kodlarla Uğraşmadan)
+
+Projenin kaynak kodlarıyla uğraşmadan direkt uygulamayı denemek istiyorsanız, sağ taraftaki **Releases** bölümünden **v1.2.0** sürümünü bulun veya aşağıdaki adımları takip edin:
+
+### 🪟 Windows İçin (Bilgisayar)
+1. Sürüm sayfasından `OPT-v1.2.0-windows.zip` dosyasını indirin.
+2. İndirdiğiniz zip dosyasını bir klasöre ayıklayın (Zipten çıkarmadan çalıştırırsanız hata verebilir).
+3. Klasörün içerisindeki MauiApp3.exe dosyasına çift tıklayarak uygulamayı başlatın.
+
+### 🤖 Android İçin (Telefon)
+1. Telefon tarayıcınızdan sürüm sayfasına girerek `OPT-v1.2.0.apk` dosyasını indirin.
+2. İndirilen `.apk` dosyasına tıklayarak kurulumu başlatın.
+3. *Not: Telefonunuz ilk defa dışarıdan uygulama yüklediğiniz için "Bilinmeyen kaynaklardan uygulama yükleme" izni isteyebilir, bu izni onaylayarak kurulumu tamamlayabilirsiniz.*
+
+---
+
 ## Kurulum (Setup)
+
 Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyebilirsiniz:
 1. **Depoyu Klonlayın:**
    ```bash
