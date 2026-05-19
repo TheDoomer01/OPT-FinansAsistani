@@ -21,6 +21,11 @@ Bu proje öğrencilerin finansal durumlarını daha iyi anlamalarına ve harcama
 | :---: | :---: | :---: | :---: | :---: |
 | ![Ana Sayfa](images/mainpage.jpg) | ![Ana Sayfa 2](images/mainpage2(new).jpg) | ![Ana Ekran 3](images/mainpage3(new).jpg) | ![Ayarlar](images/settings.jpg) | ![Harcama Ekle](images/addexpense.jpg) |
 
+# 🚀 PROJE GÜNCELLEMESİ (EKSPRE EKLEME ÖZELLİĞİ) 
+
+* 📹 **Yeni Özelliğin 20 Saniyelik Videosu:** [Buraya Tıklayarak İzleyin](https://youtu.be/R3S_i0Gbgx8?si=x1J8MkBTWU2S36i5)
+
+---
 
 ## 📥 Uygulama Nasıl Kurulur ve Çalıştırılır? (Kaynak Kodlarla Uğraşmadan)
 
