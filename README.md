@@ -23,7 +23,7 @@ Bu proje öğrencilerin finansal durumlarını daha iyi anlamalarına ve harcama
 
 # 🚀 PROJE GÜNCELLEMESİ (EKSPRE EKLEME ÖZELLİĞİ) 
 
-* 📹 **Yeni Özelliğin 20 Saniyelik Videosu:** [Buraya Tıklayarak İzleyin](https://youtu.be/R3S_i0Gbgx8?si=x1J8MkBTWU2S36i5)
+* 📹 **Yeni Özelliğin 24 Saniyelik Videosu:** [Buraya Tıklayarak İzleyin](https://youtu.be/R3S_i0Gbgx8?si=x1J8MkBTWU2S36i5)
 
 ---
 
