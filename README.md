@@ -75,6 +75,8 @@ Projemiz güvenlik nedeniyle gerçek API anahtarlarını GitHub üzerinde barın
    {
   "GeminiApiKey": "BURAYA_KENDI_API_ANAHTARINIZI_YAZIN"
    }
+
+ - "Alternatif API Girişi: Eğer secrets.json dosyasını doldurmadıysanız, uygulama açıldıktan sonra Ayarlar menüsünden de Gemini API anahtarınızı girerek özellikleri aktif hale getirebilirsiniz."
    
 - **Visual Studio Ayarı (Çok Önemli):**
    - Visual Studio'da "Solution Explorer" (Çözüm Gezgini) penceresini açın.
@@ -84,7 +86,7 @@ Projemiz güvenlik nedeniyle gerçek API anahtarlarını GitHub üzerinde barın
 
 5. **Uygulamayı Çalıştırın:**
 - Visual Studio üzerinden projenizi açın.
-   - Hedef cihaz olarak bir **Android Emulator** veya **Gerçek Android Cihaz** seçin.
+   -  Hedef cihaz olarak bir **Android Emulator** veya **Gerçek Android Cihaz** seçin.
    - `F5` tuşuna basarak hata ayıklama modunda başlatın.
 
 6. **API Anahtarı Yapılandırması:**
